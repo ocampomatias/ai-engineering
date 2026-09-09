@@ -1,0 +1,15 @@
+# Secretos
+.env
+
+# Entorno virtual
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Material del curso (no se versiona)
+program-summary.pdf
