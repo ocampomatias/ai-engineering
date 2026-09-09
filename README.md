@@ -74,8 +74,12 @@ En PowerShell, `Copy-Item .env.example .env`. En Linux o macOS, `cp .env.example
 | `OPENAI_API_KEY` | vacío | Key de OpenAI, si vas a usar OpenAI |
 | `ANTHROPIC_API_KEY` | vacío | Key de Anthropic, si vas a usar Anthropic |
 | `OPENAI_MODEL` | `gpt-4o-mini` | ID del modelo de OpenAI |
-| `ANTHROPIC_MODEL` | `claude-opus-5` | ID del modelo de Anthropic |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | ID del modelo de Anthropic |
 | `MAX_CONCURRENCY` | `5` | Cuántas llamadas pueden viajar a la vez |
+
+Los dos modelos por defecto son los más baratos de cada proveedor, que para probar el cliente
+alcanzan de sobra. Si necesitás más capacidad, cambiá `ANTHROPIC_MODEL` o `OPENAI_MODEL` en el
+`.env`.
 
 Con una sola key alcanza para probarlo. El proveedor que no tenga key devuelve un error
 controlado, no un crash.

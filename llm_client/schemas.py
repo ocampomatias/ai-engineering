@@ -67,7 +67,7 @@ class ModelConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model: str = Field(min_length=1, description="ID del modelo, ej. 'claude-opus-5'.")
+    model: str = Field(min_length=1, description="ID del modelo, ej. 'claude-haiku-4-5'.")
     temperature: Annotated[float, Field(ge=0.0, le=2.0)] | None = Field(
         default=None,
         description="Aleatoriedad de la respuesta, de 0 a 2. None deja el default del proveedor.",

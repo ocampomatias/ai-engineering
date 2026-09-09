@@ -13,10 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from .schemas import Provider
 
-#: Modelos por defecto. Se sobrescriben con OPENAI_MODEL / ANTHROPIC_MODEL.
+#: Modelos por defecto: los mas baratos de cada proveedor, que alcanzan de sobra
+#: para probar el cliente. Se sobrescriben con OPENAI_MODEL / ANTHROPIC_MODEL.
 DEFAULT_MODELS: dict[Provider, str] = {
     Provider.OPENAI: "gpt-4o-mini",
-    Provider.ANTHROPIC: "claude-opus-5",
+    Provider.ANTHROPIC: "claude-haiku-4-5",
 }
 
 
