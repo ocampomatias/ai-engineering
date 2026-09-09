@@ -1,6 +1,6 @@
-"""Unified Async LLM Client — capa de abstracción asíncrona sobre OpenAI y Anthropic.
+"""Cliente asincrono unificado para OpenAI y Anthropic.
 
-Pre-entrega 1 del curso AI Engineering (Coderhouse).
+Pre-entrega 1 del curso AI Engineering de Coderhouse.
 """
 
 from .base import BaseLLMClient

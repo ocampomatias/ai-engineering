@@ -1,15 +1,14 @@
-"""`AsyncLLMManager`: fábrica de clientes + capa de resiliencia.
+"""Fábrica de clientes y capa de resiliencia.
 
-Esta es la única clase que usa el resto de la aplicación. Resuelve tres cosas:
+`AsyncLLMManager` es la única clase que necesita usar el resto de la aplicación.
 
-1. **Intercambiabilidad**: elige `OpenAIClient` o `AnthropicClient` según una
-   variable de configuración (`LLM_PROVIDER`), con un patrón Factory.
-2. **Resiliencia**: timeout por llamada, reintentos con backoff exponencial y
-   jitter ante errores transitorios, y semáforo para no chocar contra el rate
-   limit del proveedor.
-3. **Errores controlados**: `generate()` siempre devuelve un `ModelResponse`;
-   si falló, `response.ok` es False y `response.error` explica por qué. El
-   programa que llama nunca recibe una excepción del SDK.
+Elige el cliente concreto según `LLM_PROVIDER`, con un patrón Factory. Envuelve
+cada llamada en un timeout y un semáforo, y reintenta con backoff exponencial
+cuando el error es transitorio.
+
+`generate()` siempre devuelve un `ModelResponse`. Si falló, `response.ok` es
+False y `response.error` dice qué pasó: el llamador nunca ve una excepción del
+SDK.
 """
 
 import asyncio
@@ -135,8 +134,7 @@ class AsyncLLMManager:
 
         for intento in range(config.max_retries + 1):
             try:
-                # El semáforo limita cuántas llamadas viajan en paralelo: es lo
-                # que evita el 429 cuando se disparan muchas a la vez.
+                # El semáforo es lo que evita el 429 cuando salen muchas juntas.
                 async with self._semaphore:
                     async with asyncio.timeout(config.timeout_seconds):
                         resultado = await operacion()

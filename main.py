@@ -1,7 +1,7 @@
 """Script de validación del Unified Async LLM Client.
 
-Prueba los dos modos que pide la consigna —respuesta completa y streaming—
-contra el proveedor configurado, y demuestra el manejo de errores y la
+Prueba los dos modos que pide la consigna, respuesta completa y streaming,
+contra el proveedor configurado. Tambien muestra el manejo de errores y la
 concurrencia.
 
 Uso:
@@ -48,7 +48,7 @@ def titulo(texto: str) -> None:
 
 
 async def probar_generate(manager: AsyncLLMManager, provider: Provider, prompt: str) -> bool:
-    titulo(f"[{provider.value}] Modo normal — await generate()")
+    titulo(f"[{provider.value}] Modo normal: await generate()")
 
     config = manager.build_config(
         provider,
@@ -80,7 +80,7 @@ async def probar_generate(manager: AsyncLLMManager, provider: Provider, prompt: 
 
 
 async def probar_stream(manager: AsyncLLMManager, provider: Provider, prompt: str) -> bool:
-    titulo(f"[{provider.value}] Modo streaming — async for sobre el generador")
+    titulo(f"[{provider.value}] Modo streaming: async for sobre el generador")
 
     config = manager.build_config(provider, max_tokens=400, system_prompt=SYSTEM_PROMPT)
     print(f"modelo: {config.model}\n")
@@ -115,7 +115,7 @@ async def probar_stream(manager: AsyncLLMManager, provider: Provider, prompt: st
 
 async def probar_errores(manager: AsyncLLMManager, provider: Provider) -> None:
     """Un modelo inexistente no debe romper el programa."""
-    titulo(f"[{provider.value}] Resiliencia — modelo inválido, sin crash")
+    titulo(f"[{provider.value}] Resiliencia: modelo invalido, sin crash")
 
     respuesta = await manager.generate(
         "hola",
@@ -138,7 +138,7 @@ async def probar_errores(manager: AsyncLLMManager, provider: Provider) -> None:
 
 async def probar_concurrencia(manager: AsyncLLMManager, provider: Provider) -> None:
     """Varias llamadas en paralelo, con el semáforo como control de flujo."""
-    titulo(f"[{provider.value}] Concurrencia — asyncio.gather + semáforo")
+    titulo(f"[{provider.value}] Concurrencia: asyncio.gather + semaforo")
 
     preguntas = [
         "Definí entropía en una oración.",
@@ -164,7 +164,7 @@ async def probar_concurrencia(manager: AsyncLLMManager, provider: Provider) -> N
 
 
 async def probar_comparacion(manager: AsyncLLMManager, providers: list[Provider]) -> None:
-    titulo("Comparación — mismo prompt a varios proveedores en paralelo")
+    titulo("Comparacion: mismo prompt a varios proveedores en paralelo")
 
     resultados = await manager.compare_providers(
         "En una sola oración: ¿qué es la entropía?",
@@ -218,7 +218,7 @@ async def main() -> int:
     settings = load_settings()
     disponibles = settings.available_providers()
 
-    titulo("Unified Async LLM Client — script de validación")
+    titulo("Unified Async LLM Client: script de validacion")
     print(f"proveedor configurado : {settings.provider.value}")
     print(f"con API key cargada   : {[p.value for p in disponibles] or 'ninguno'}")
     print(f"concurrencia máxima   : {settings.max_concurrency}")

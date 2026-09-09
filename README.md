@@ -1,71 +1,52 @@
 # Unified Async LLM Client
 
-Capa de abstracción asíncrona sobre las APIs de **OpenAI** y **Anthropic**, en Python 3.12.
-Un solo objeto (`AsyncLLMManager`) expone la misma interfaz para los dos proveedores, con
-streaming de tokens, validación de esquemas con Pydantic y manejo de errores que no rompe
-el programa.
+Un cliente asíncrono que habla con OpenAI y con Anthropic usando la misma interfaz. Python 3.12,
+streaming de tokens, validación con Pydantic y errores que no tiran abajo el programa.
 
-> Pre-entrega 1 — curso **AI Engineering**, Coderhouse.
+Pre-entrega 1 del curso AI Engineering de Coderhouse.
 
----
+## El problema
 
-## Índice
+Si instanciás el SDK de OpenAI directamente en tu lógica, el día que quieras probar Claude tenés
+que reescribir todo. Los dos SDKs no se parecen: en OpenAI el texto sale de
+`choices[0].message.content`, en Anthropic viene como una lista de bloques que hay que filtrar. El
+system prompt en uno es un mensaje más y en el otro es un parámetro aparte. Y así.
 
-- [Qué resuelve](#qué-resuelve)
-- [Instalación](#instalación)
-- [Variables de entorno](#variables-de-entorno)
-- [Cómo ejecutar el script de prueba](#cómo-ejecutar-el-script-de-prueba)
-- [Uso como librería](#uso-como-librería)
-- [Arquitectura](#arquitectura)
-- [Decisiones de diseño](#decisiones-de-diseño)
-- [Tests](#tests)
-- [Estructura del repositorio](#estructura-del-repositorio)
+La solución es una interfaz común arriba de los dos, y que las diferencias queden encerradas en
+cada cliente concreto.
 
----
-
-## Qué resuelve
-
-Instanciar el SDK de OpenAI o de Anthropic directamente en la lógica de negocio trae tres
-problemas: acoplamiento (cambiar de proveedor obliga a reescribir código), dificultad para
-testear, e inconsistencia entre las firmas de cada SDK. Este proyecto los resuelve con
-cuatro piezas:
-
-| Requisito | Cómo se implementa |
-|---|---|
-| **Intercambiabilidad** | `BaseLLMClient` (ABC) + patrón Factory en `AsyncLLMManager`. Cambiar de proveedor es cambiar una variable de entorno. |
-| **Asincronía** | `AsyncOpenAI` y `AsyncAnthropic`. Todas las llamadas son `await`; nada bloquea el event loop. |
-| **Streaming** | Generadores asíncronos: `yield` dentro de un `async for` que recorre el stream del SDK. |
-| **Validación** | Pydantic v2 para mensajes, configuración del modelo, respuestas y errores. `SecretStr` para las API keys. |
-
-Diferencias entre proveedores que la abstracción absorbe, para que quien consume el cliente
-no tenga que conocerlas:
+Estas son las que hubo que absorber:
 
 | | OpenAI | Anthropic |
 |---|---|---|
-| System prompt | un mensaje más, con `role="system"` | parámetro aparte (`system=`) |
-| Texto de la respuesta | `choices[0].message.content` | lista de bloques; hay que filtrar los de tipo `text` |
-| Tope de tokens | `max_completion_tokens` (opcional) | `max_tokens` (obligatorio) |
-| `temperature` / `top_p` | soportados (0 a 2) | **los modelos actuales los quitaron**; el cliente los descarta y avisa por log |
-| Tokens consumidos | `usage.prompt_tokens` / `completion_tokens` | `usage.input_tokens` / `output_tokens` |
+| System prompt | un mensaje con `role="system"` | parámetro `system=` |
+| Texto de la respuesta | `choices[0].message.content` | lista de bloques, filtrar los `text` |
+| Tope de tokens | `max_completion_tokens`, opcional | `max_tokens`, obligatorio |
+| `temperature` / `top_p` | 0 a 2 | los modelos actuales ya no los aceptan |
+| Tokens usados | `prompt_tokens` / `completion_tokens` | `input_tokens` / `output_tokens` |
 
----
+Lo de `temperature` en Anthropic me sorprendió: el SDK 1.x ni siquiera expone el parámetro. Si se
+lo mandás, la API devuelve 400. Así que `ModelConfig` lo valida de 0 a 2 igual, porque es lo que
+pide la consigna, y el cliente de Anthropic lo descarta y lo anota en el log de debug.
 
 ## Instalación
 
-Requiere **Python 3.12** o superior (`asyncio.timeout`, `StrEnum`, sintaxis `X | None`).
+Hace falta Python 3.12 o más nuevo, porque uso `asyncio.timeout`, `StrEnum` y la sintaxis
+`X | None`.
 
 ```bash
-git clone <URL-de-este-repo>
-cd <carpeta-del-repo>
+git clone https://github.com/ocampomatias/ai-engineering.git
 ```
 
-Crear el entorno virtual e instalar dependencias:
+```bash
+cd ai-engineering
+```
 
 ```bash
 python -m venv .venv
 ```
 
-Activarlo:
+Activar el entorno en Windows:
 
 ```bash
 .venv\Scripts\activate
@@ -77,58 +58,50 @@ En Linux o macOS es `source .venv/bin/activate`. Después:
 pip install -r requirements.txt
 ```
 
----
-
 ## Variables de entorno
 
-Copiar la plantilla y completar:
+Copiá la plantilla:
 
 ```bash
 copy .env.example .env
 ```
 
-En PowerShell: `Copy-Item .env.example .env`. En Linux o macOS: `cp .env.example .env`.
+En PowerShell, `Copy-Item .env.example .env`. En Linux o macOS, `cp .env.example .env`.
 
-| Variable | Obligatoria | Default | Para qué sirve |
-|---|---|---|---|
-| `LLM_PROVIDER` | no | `openai` | Proveedor activo: `openai` o `anthropic`. Es la variable de configuración que elige el cliente. |
-| `OPENAI_API_KEY` | sí, si se usa OpenAI | — | Key de OpenAI ([consola](https://platform.openai.com/api-keys)). |
-| `ANTHROPIC_API_KEY` | sí, si se usa Anthropic | — | Key de Anthropic ([consola](https://console.anthropic.com/settings/keys)). |
-| `OPENAI_MODEL` | no | `gpt-4o-mini` | ID del modelo de OpenAI. |
-| `ANTHROPIC_MODEL` | no | `claude-opus-5` | ID del modelo de Anthropic. |
-| `MAX_CONCURRENCY` | no | `5` | Tope de llamadas simultáneas (semáforo). |
+| Variable | Default | Para qué |
+|---|---|---|
+| `LLM_PROVIDER` | `openai` | Qué proveedor usar: `openai` o `anthropic` |
+| `OPENAI_API_KEY` | vacío | Key de OpenAI, si vas a usar OpenAI |
+| `ANTHROPIC_API_KEY` | vacío | Key de Anthropic, si vas a usar Anthropic |
+| `OPENAI_MODEL` | `gpt-4o-mini` | ID del modelo de OpenAI |
+| `ANTHROPIC_MODEL` | `claude-opus-5` | ID del modelo de Anthropic |
+| `MAX_CONCURRENCY` | `5` | Cuántas llamadas pueden viajar a la vez |
 
-**Alcanza con una sola API key** para probar el proyecto: el proveedor sin key devuelve un
-error controlado, no un crash.
+Con una sola key alcanza para probarlo. El proveedor que no tenga key devuelve un error
+controlado, no un crash.
 
-El `.env` está en `.gitignore` y nunca se sube. Las keys se guardan en memoria envueltas en
-`pydantic.SecretStr`, así que no aparecen en logs ni en tracebacks.
+El `.env` está en `.gitignore`. Las keys se guardan envueltas en `pydantic.SecretStr`, así que si
+alguna vez imprimís la configuración por error, no salen en pantalla.
 
-Si un modelo por defecto no está habilitado para tu cuenta, la llamada devuelve un
-`ModelNotFoundError` controlado. Para ver cuáles tenés disponibles:
+Si el modelo por defecto no está habilitado en tu cuenta, la llamada devuelve un
+`ModelNotFoundError`. Para ver cuáles tenés:
 
 ```bash
 python main.py --list-models
 ```
 
----
-
-## Cómo ejecutar el script de prueba
-
-`main.py` es el script de validación. Prueba los dos modos que pide la consigna —respuesta
-completa y streaming— con la pregunta "¿Qué es la entropía?".
+## Correr el script de prueba
 
 ```bash
 python main.py
 ```
 
-Corre contra el proveedor de `LLM_PROVIDER` y ejecuta cuatro bloques:
+Le pregunta "¿Qué es la entropía?" al proveedor configurado y hace cuatro cosas:
 
-1. **Modo normal** — `await generate()`, respuesta completa con tokens y latencia.
-2. **Modo streaming** — `async for` sobre el generador, imprimiendo fragmento por fragmento.
-3. **Resiliencia** — pide un modelo inexistente a propósito y muestra que el error vuelve
-   estructurado, sin cortar el programa.
-4. **Concurrencia** — tres prompts en paralelo con `asyncio.gather` y semáforo.
+1. Pide la respuesta completa con `await generate()` y muestra tokens y latencia.
+2. Pide lo mismo en streaming, imprimiendo cada fragmento a medida que llega.
+3. Pide un modelo que no existe, para mostrar que el error vuelve como dato y el programa sigue.
+4. Lanza tres prompts en paralelo con `asyncio.gather`.
 
 Otras opciones:
 
@@ -145,19 +118,13 @@ python main.py --compare
 ```
 
 ```bash
-python main.py --list-models
-```
-
-```bash
 python main.py --prompt "Explicá qué es un event loop"
 ```
 
-`--all` prueba todos los proveedores que tengan API key; `--compare` manda el mismo prompt a
-los dos en paralelo y compara respuestas y latencias.
+`--all` prueba todos los proveedores que tengan key. `--compare` le manda el mismo prompt a los
+dos en paralelo y muestra las dos respuestas con sus latencias.
 
----
-
-## Uso como librería
+## Usarlo como librería
 
 Respuesta completa:
 
@@ -170,14 +137,13 @@ async def main():
         respuesta = await manager.generate("¿Qué es la entropía?")
         if respuesta.ok:
             print(respuesta.text)
-            print(respuesta.usage.total_tokens, "tokens")
         else:
             print("falló:", respuesta.error.message)
 
 asyncio.run(main())
 ```
 
-Streaming:
+Streaming, si solo querés el texto:
 
 ```python
 async with AsyncLLMManager() as manager:
@@ -185,8 +151,7 @@ async with AsyncLLMManager() as manager:
         print(texto, end="", flush=True)
 ```
 
-Si además querés el evento de cierre y el consumo de tokens, usá `stream()` en lugar de
-`stream_text()`:
+Si además necesitás saber cuándo terminó y cuántos tokens gastó, usá `stream()`:
 
 ```python
 async for chunk in manager.stream("¿Qué es la entropía?"):
@@ -198,14 +163,14 @@ async for chunk in manager.stream("¿Qué es la entropía?"):
         print("\nerror:", chunk.error.message)
 ```
 
-Cambiar de proveedor sin tocar la lógica:
+Cambiar de proveedor no cambia nada del código de arriba:
 
 ```python
 async with AsyncLLMManager(provider="anthropic") as manager:
     respuesta = await manager.generate("Hola")
 ```
 
-Conversación con historial y parámetros validados:
+Con historial de conversación y parámetros propios:
 
 ```python
 from llm_client import ChatMessage
@@ -220,7 +185,7 @@ mensajes = [
 respuesta = await manager.generate(mensajes, temperature=0.3, max_tokens=500)
 ```
 
-Varias llamadas en paralelo, con el semáforo controlando el flujo:
+Varias llamadas de una, con el semáforo controlando cuántas salen a la vez:
 
 ```python
 respuestas = await manager.generate_many([
@@ -230,108 +195,89 @@ respuestas = await manager.generate_many([
 ])
 ```
 
----
-
-## Arquitectura
+## Cómo está armado
 
 ```
-                       tu código
-                           |
-                   AsyncLLMManager          <- Factory + timeout + reintentos + semáforo
-                           |
-                    BaseLLMClient           <- interfaz común (ABC)
-                     /            \
-             OpenAIClient      AnthropicClient
-                    |                |
-              AsyncOpenAI      AsyncAnthropic
+             tu código
+                 |
+          AsyncLLMManager        fábrica, timeout, reintentos, semáforo
+                 |
+           BaseLLMClient         interfaz común (ABC)
+            /          \
+    OpenAIClient    AnthropicClient
+          |               |
+    AsyncOpenAI     AsyncAnthropic
 ```
 
-Flujo de una llamada a `generate()`:
+Cuando llamás a `generate()` pasa esto:
 
-1. `AsyncLLMManager` resuelve qué proveedor usar y arma un `ModelConfig` validado.
-2. La fábrica devuelve el cliente concreto (lo instancia la primera vez y lo reutiliza).
-3. La capa de resiliencia envuelve la llamada en un semáforo y un `asyncio.timeout`.
-4. El cliente concreto traduce mensajes y parámetros al formato de su SDK, hace `await`, y
-   normaliza la respuesta a `ModelResponse`.
-5. Si el SDK lanza una excepción, el cliente la traduce a la jerarquía de `llm_client.errors`.
-   Si es transitoria, el manager reintenta con backoff exponencial; si se agotan los
-   reintentos, devuelve un `ModelResponse` con `error` cargado.
+1. El manager decide qué proveedor va y arma un `ModelConfig` que Pydantic valida.
+2. La fábrica devuelve el cliente concreto. La primera vez lo instancia, después lo reutiliza para
+   no rearmar la conexión HTTP en cada llamada.
+3. La llamada se envuelve en un semáforo y un `asyncio.timeout`.
+4. El cliente concreto traduce los mensajes al formato de su SDK, hace `await`, y devuelve un
+   `ModelResponse` con la misma forma para los dos proveedores.
+5. Si el SDK lanza una excepción, el cliente la traduce a la jerarquía de `llm_client.errors`. Si
+   el error es transitorio el manager reintenta con backoff exponencial; si se agotan los
+   reintentos, devuelve el `ModelResponse` con el error adentro.
 
----
+## Por qué algunas cosas están así
 
-## Decisiones de diseño
+Los errores vuelven como dato en lugar de excepción. `generate()` siempre devuelve un
+`ModelResponse`; si algo se rompió, `respuesta.ok` es `False` y `respuesta.error` dice qué pasó, si
+vale la pena reintentar y cuántos intentos hubo. Un 429 o una key mal escrita no matan el proceso.
 
-**Los errores vuelven como dato, no como excepción.** `generate()` siempre devuelve un
-`ModelResponse`. Si algo falló, `respuesta.ok` es `False` y `respuesta.error` trae tipo,
-mensaje, si es reintentable y cuántos intentos se hicieron. Un 429 o una key inválida no
-tumban el proceso.
+En streaming el generador cierra con un chunk de tipo `error` en vez de lanzar una excepción a
+mitad de camino. Si estás sirviendo eso a un frontend, podés mostrar un cartel y cerrar el stream
+prolijo, en lugar de que se corte sin explicación.
 
-**El streaming cierra con un chunk de error, no con una excepción a mitad de camino.** El
-generador emite `StreamChunk(type="delta")` por cada fragmento, `type="done"` al terminar, y
-`type="error"` si algo se rompe. Un consumidor —una API web, una CLI— puede cerrar el stream
-con un mensaje en pantalla en lugar de cortarse sin explicación.
+El streaming no se reintenta solo. Si ya salieron fragmentos en pantalla, repetir la llamada
+duplicaría el texto. Quien consume el stream decide si vuelve a pedirlo.
 
-**El streaming no se reintenta solo.** Si ya se emitieron fragmentos al usuario, repetir la
-llamada duplicaría texto. Quien consume el stream decide si vuelve a pedirlo.
+Los dos SDKs se instancian con `max_retries=0`. Ellos reintentan solos por defecto, pero preferí
+que la política viva en un lugar único y visible (`AsyncLLMManager._con_reintentos`) en vez de
+repartida entre dos capas. Reintenta ante rate limit, red, timeout y errores 5xx. No reintenta
+ante 401, 404 ni 400, porque insistir con un error permanente solo gasta cuota.
 
-**Una sola política de reintentos.** Los SDKs se instancian con `max_retries=0` a propósito:
-la lógica de reintentos vive en `AsyncLLMManager._con_reintentos`, visible y testeable, en
-lugar de repartida entre dos capas. Se reintenta ante rate limit, red, timeout y 5xx; no se
-reintenta ante 401, 404 o 400, porque reintentar un error permanente solo gasta cuota.
+El semáforo está desde el principio. Tirar mil llamadas con `asyncio.gather` te garantiza un
+`429: Too Many Requests`. Con el semáforo se encolan todas pero corren N a la vez.
 
-**Semáforo desde el día uno.** Disparar mil llamadas con `asyncio.gather` garantiza un
-`429: Too Many Requests`. El semáforo (`MAX_CONCURRENCY`) limita cuántas viajan en simultáneo:
-se encolan todas, corren N.
+Los modelos de Pydantic usan `extra="forbid"`. Si escribís `temperatura=0.5` en lugar de
+`temperature`, falla al construir el objeto y no en medio de la llamada a la API.
 
-**`temperature` se valida 0–2 aunque Anthropic ya no la acepte.** La consigna pide ese rango,
-que es el de OpenAI. Los modelos actuales de Anthropic quitaron los parámetros de sampling
-—el SDK 1.x ni los expone—, así que `AnthropicClient` descarta el valor y lo registra en el
-log de debug, en vez de mandarlo y comerse un 400. Esconder esa clase de diferencia es
-justamente el trabajo de la capa de abstracción.
-
-**Pydantic con `extra="forbid"`.** Un typo como `temperatura=0.5` falla al construir el
-objeto, no en la mitad de una llamada a la API.
-
-**Sin `pydantic-settings`.** La configuración se lee con `python-dotenv` y se valida con un
-`BaseModel` común, para no agregar dependencias fuera de las cuatro que pide la consigna.
-
----
+No usé `pydantic-settings` para leer el `.env`, aunque sería lo natural, porque la consigna lista
+cuatro dependencias y no quise agregar una quinta. Se resuelve con `python-dotenv` más un
+`BaseModel` normal.
 
 ## Tests
-
-37 tests que corren **sin API keys**: los proveedores se reemplazan por dobles.
 
 ```bash
 python -m pytest -q
 ```
 
-Cubren la validación de esquemas (rangos de `temperature` y `max_tokens`, roles inválidos,
-campos desconocidos), que la API key no se filtre en el `repr`, la traducción de formato de
-cada proveedor, el orden de los chunks del stream, que el event loop no se bloquee, y la
-resiliencia completa: reintento ante 429, no-reintento ante 401, timeout, error en medio del
-stream y un prompt fallido que no tumba el lote.
+Son 37 tests y corren sin API keys: los proveedores se reemplazan por dobles. Cubren los rangos de
+`temperature` y `max_tokens`, roles inválidos, campos con nombre mal escrito, que la key no
+aparezca en el `repr`, la traducción de formato de cada proveedor, el orden de los chunks del
+stream, que una llamada no bloquee el event loop, y la parte de resiliencia: reintento ante 429,
+nada de reintentos ante 401, timeout, error en medio del stream, y un prompt fallido que no arrastra
+al resto del lote.
 
----
-
-## Estructura del repositorio
+## Archivos
 
 ```
-.
-├── llm_client/
-│   ├── __init__.py              # API pública del paquete
-│   ├── schemas.py               # Pydantic: ChatMessage, ModelConfig, ModelResponse, StreamChunk
-│   ├── base.py                  # BaseLLMClient (ABC) con generate() y stream()
-│   ├── errors.py                # jerarquía de errores propia, con flag de reintentable
-│   ├── settings.py              # carga del .env con SecretStr
-│   ├── manager.py               # AsyncLLMManager: fábrica + resiliencia
-│   └── providers/
-│       ├── openai_client.py     # AsyncOpenAI
-│       └── anthropic_client.py  # AsyncAnthropic
-├── tests/
-│   └── test_llm_client.py       # 37 tests, sin API keys
-├── main.py                      # script de validación (modo normal + streaming)
-├── requirements.txt
-├── .env.example                 # plantilla de variables de entorno
-├── pytest.ini
-└── README.md
+llm_client/
+  schemas.py               ChatMessage, ModelConfig, ModelResponse, StreamChunk
+  base.py                  BaseLLMClient (ABC) con generate() y stream()
+  errors.py                jerarquía de errores, con marca de reintentable
+  settings.py              lectura del .env
+  manager.py               AsyncLLMManager
+  providers/
+    openai_client.py       AsyncOpenAI
+    anthropic_client.py    AsyncAnthropic
+tests/
+  test_llm_client.py       37 tests con dobles
+main.py                    script de prueba
+requirements.txt
+.env.example
+pytest.ini
 ```

@@ -137,8 +137,8 @@ class OpenAIClient(BaseLLMClient):
     ) -> ModelResponse:
         inicio = time.perf_counter()
         try:
-            # `await` cede el control del event loop mientras espera la red.
-            # Usar el cliente síncrono acá bloquearía todo el proceso.
+            # El await libera el event loop mientras espera la red. Con el
+            # cliente síncrono acá se frenaría todo el proceso.
             respuesta = await self._client.chat.completions.create(
                 **self._build_payload(messages, config)
             )

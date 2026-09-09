@@ -1,10 +1,8 @@
-"""Contratos de datos del cliente unificado, validados con Pydantic v2.
+"""Contratos de datos del cliente, validados con Pydantic v2.
 
-Todo lo que entra y sale de los clientes pasa por estos modelos. El objetivo es
-evitar el "error de diccionarios anidados": nadie escribe
-`resp["choices"][0]["message"]["content"]` a mano, porque cada proveedor
-devuelve una forma distinta y esa expresión revienta en cuanto se cambia de
-proveedor.
+Todo lo que entra y sale de los clientes pasa por estos modelos, así nadie tiene
+que escribir `resp["choices"][0]["message"]["content"]` a mano. Esa expresión
+funciona con OpenAI y se rompe con Anthropic, que devuelve otra estructura.
 """
 
 from enum import StrEnum
