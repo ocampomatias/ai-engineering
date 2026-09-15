@@ -1,8 +1,13 @@
-# Dependencias que pide la consigna
+# Pre-entrega 1: cliente unificado
 openai>=3.11.0
 anthropic>=1.4.0
 pydantic>=2.13.0
 python-dotenv>=1.2.0
+
+# Pre-entrega 2: pipeline LCEL
+langchain-core>=1.6.3
+langchain-openai>=1.6.2
+langchain-anthropic>=1.7.2
 
 # Desarrollo (para correr los tests, no hacen falta para usar el cliente)
 pytest>=8.0.0

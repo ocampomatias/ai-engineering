@@ -1,9 +1,217 @@
-# Unified Async LLM Client
+# AI Engineering (Coderhouse)
+
+Proyecto integrador del curso. Cada pre-entrega se apoya en la anterior.
+
+| Entrega | Qué es | Dónde |
+|---|---|---|
+| Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
+| Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
+
+La instalación y las variables de entorno son las mismas para las dos: están en
+[Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 2: pipeline de extracción de entidades técnicas
+
+Le pasás un párrafo técnico, como una descripción de arquitectura o un log de error, y te devuelve
+un objeto validado con las tecnologías que menciona, qué tan crítico es y un resumen. Está armado
+con LangChain (LCEL) y Pydantic, y usa la configuración de la pre-entrega 1: el mismo `.env`, las
+mismas keys y el mismo `LLM_PROVIDER`.
+
+## Correrlo
+
+Con el entorno instalado y el `.env` completo:
+
+```bash
+python probar_pipeline.py
+```
+
+```bash
+python probar_pipeline.py --provider anthropic
+```
+
+```bash
+python probar_pipeline.py --texto "El worker de Celery no llega a Redis y la cola no para de crecer"
+```
+
+El script analiza tres textos (una arquitectura, un log de error y una propuesta de mejora) y
+después hace dos pruebas de estrés: un texto ambiguo sin nombres de tecnologías y una llamada con un
+tope de 30 tokens, que obliga al modelo a cortar la respuesta a la mitad.
+
+Desde código:
+
+```python
+import asyncio
+from pipeline import process_text
+
+async def main():
+    entidades = await process_text(
+        "La API en FastAPI tarda 4 segundos porque se agota el pool de PostgreSQL."
+    )
+    print(entidades.model_dump_json(indent=2))
+
+asyncio.run(main())
+```
+
+## Ejemplo de salida
+
+Entrada:
+
+```
+2026-09-14T03:12:44Z ERROR [payments-worker] celery.task.process_payment failed:
+psycopg.OperationalError: connection to server at 'db-prod.internal' (10.0.3.12), port 5432
+failed: FATAL: remaining connection slots are reserved. Retries exhausted (5/5). RabbitMQ queue
+'payments' depth=1243 and growing.
+```
+
+Salida real con `claude-haiku-4-5`:
+
+```json
+{
+  "tecnologias": [
+    "Celery",
+    "PostgreSQL",
+    "RabbitMQ",
+    "psycopg"
+  ],
+  "nivel_de_criticidad": "alta",
+  "resumen_tecnico": "El worker de pagos basado en Celery no puede conectarse a PostgreSQL porque se agotaron los slots de conexión disponibles, causando fallos en el procesamiento y acumulación de mensajes en la cola RabbitMQ sin capacidad de recuperación."
+}
+```
+
+## La cadena
+
+Está en `pipeline/chain.py`:
+
+```python
+extraccion = modelo.with_structured_output(
+    EntidadesTecnicas, method="function_calling", include_raw=True
+) | RunnableLambda(_validar_salida)
+
+cadena = crear_prompt() | extraccion.with_retry(
+    retry_if_exception_type=ERRORES_REINTENTABLES,
+    stop_after_attempt=3,
+)
+```
+
+1. `crear_prompt()` es un `ChatPromptTemplate` con un mensaje de sistema y uno humano. Las
+   instrucciones de formato entran como variable (`{instrucciones_de_formato}`, fijada con
+   `.partial()`) y el texto como `{texto}`. No hay f-strings.
+2. `with_structured_output` le pasa el esquema al modelo como herramienta obligatoria y parsea lo
+   que vuelve a un `EntidadesTecnicas`. Uso `method="function_calling"` en los dos proveedores para
+   que se comporten igual.
+3. `_validar_salida` decide si la salida se acepta. Si no, lanza una excepción.
+4. `.with_retry()` vuelve a correr los pasos 2 y 3. El prompt queda afuera: si falla al armarse es un
+   error de programación, y repetirlo no lo arregla.
+
+`process_text(text)` ejecuta la cadena con `.ainvoke()`, loguea cada intento y devuelve el objeto
+validado. Si se agotan los reintentos lanza `ExtraccionError`, que dice cuántos intentos hubo y
+guarda la causa original en `__cause__`.
+
+## El esquema
+
+`pipeline/schemas.py`:
+
+| Campo | Tipo | Restricciones |
+|---|---|---|
+| `tecnologias` | `list[str]` | entre 1 y 30; se recortan espacios y se sacan repetidos sin distinguir mayúsculas |
+| `nivel_de_criticidad` | `NivelCriticidad` | enum `baja` / `media` / `alta`; acepta `"Alta"` y lo normaliza |
+| `resumen_tecnico` | `str` | entre 20 y 400 caracteres |
+
+Tiene `extra="forbid"`, así que un campo inventado por el modelo también es un error. Cada campo
+lleva una `description` que explica qué va ahí, porque LangChain la manda al modelo como parte del
+esquema. La descripción de `nivel_de_criticidad` define el criterio de cada nivel.
+
+## Resiliencia
+
+Se reintenta ante:
+
+- `ValidationError` y `OutputParserException`: JSON que no respeta el esquema, un campo que falta,
+  un valor fuera del enum, o un modelo que contestó texto en vez de llenar la estructura.
+- `SalidaIncompletaError`: el proveedor avisó que cortó por tope de tokens.
+- Rate limit, red, timeout y errores 5xx de los dos SDKs. En Anthropic eso incluye
+  `OverloadedError` (529) y `ServiceUnavailableError`, que no heredan de `InternalServerError` y se
+  escapaban si solo miraba esa clase.
+
+No se reintenta ante 401, 404, 400 ni errores de programación: salen al primer intento.
+
+Lo del tope de tokens es lo que advierte la consigna. Por eso la cadena usa `include_raw=True`:
+además del objeto parseado, devuelve el mensaje crudo con su `stop_reason` (Anthropic) o
+`finish_reason` (OpenAI). `_validar_salida` mira eso antes que nada. Si dice `max_tokens` o
+`length`, descarta la salida aunque haya validado, porque un objeto a medias puede pasar la
+validación de casualidad.
+
+Como en la pre-entrega 1, los SDKs se crean con `max_retries=0`. La política de reintentos vive en
+un solo lugar, el `.with_retry()`.
+
+## Logs
+
+`.with_retry()` no avisa cuando reintenta. Para ver cada intento hay un callback de LangChain,
+`ObservadorDeExtraccion`, que se pasa en la config de `.ainvoke()` y se hereda a toda la cadena.
+Cuenta cada llamada al modelo y loguea con qué motivo terminó y cuántos tokens usó. La validación
+loguea por su lado si aceptó o por qué rechazó.
+
+La prueba del tope de 30 tokens se ve así:
+
+```
+INFO    | pipeline.chain | procesando texto de 303 caracteres
+INFO    | pipeline.chain | intento 1: llamando al modelo
+INFO    | pipeline.chain | intento 1: respuesta recibida (fin: max_tokens, tokens: 1303 entrada / 30 salida)
+WARNING | pipeline.chain | validación: respuesta cortada por tope de tokens (max_tokens), se descarta
+INFO    | pipeline.chain | intento 2: llamando al modelo
+INFO    | pipeline.chain | intento 2: respuesta recibida (fin: max_tokens, tokens: 1303 entrada / 30 salida)
+WARNING | pipeline.chain | validación: respuesta cortada por tope de tokens (max_tokens), se descarta
+ERROR   | pipeline.chain | extracción fallida tras 2 intento(s): SalidaIncompletaError: la respuesta se cortó por tope de tokens (max_tokens)
+```
+
+Reintentar con el mismo tope no lo arregla, y está bien que no lo haga. El reintento está pensado
+para fallas de formato ocasionales. Lo que muestra esta prueba es que un objeto cortado nunca llega
+a quien llama: termina en un error controlado.
+
+## Lo que encontré en la prueba de estrés
+
+Con el texto ambiguo ("anda lento, puede ser la base o el deploy del viernes") esperaba que la
+validación fallara, porque no nombra ninguna tecnología y el esquema exige al menos una. No falla.
+El modelo llena el campo con lo que puede: en una corrida devolvió `["Base de datos", "Deployment"]`
+y en la siguiente `["<UNKNOWN>"]`. Las dos salidas pasan la validación.
+
+Es esperable: la lista no está vacía, y Pydantic no tiene forma de saber que "Base de datos" es
+genérico y "PostgreSQL" no. Si esto importara en producción, habría que validar contra un catálogo
+de tecnologías conocidas, o agregar un paso que verifique que cada nombre aparece textualmente en el
+texto de entrada. Lo dejo anotado en vez de esconderlo, porque es justo lo que la prueba tenía que
+mostrar: el contrato garantiza la forma de la salida, no que sea verdad.
+
+También muestra por qué conviene fijar `temperature` en 0 donde el proveedor lo permite (en OpenAI
+está en 0; Anthropic ya no acepta el parámetro). Con un texto sin señal clara, dos corridas
+idénticas no devuelven lo mismo.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_pipeline.py
+```
+
+Son 24 tests y no usan API keys: el LLM es un chat model falso que devuelve respuestas de un guion.
+Cubren las restricciones del esquema, que el prompt solo espere `{texto}`, el camino feliz, el
+reintento ante criticidad inválida, campo faltante, texto en vez de estructura, respuesta cortada
+por `stop_reason` y por `finish_reason`, error de red transitorio, que un error permanente no se
+reintente, que se agoten los intentos, y `abatch` con varios textos.
+
+## Archivos
+
+```
+pipeline/
+  schemas.py          EntidadesTecnicas y NivelCriticidad (Pydantic)
+  prompts.py          ChatPromptTemplate con instrucciones de formato
+  chain.py            modelo, cadena LCEL, validación, reintento, logs y process_text()
+probar_pipeline.py    mini-script de prueba asíncrono
+tests/
+  test_pipeline.py    24 tests con modelo falso
+```
+
+# Pre-entrega 1: Unified Async LLM Client
 
 Un cliente asíncrono que habla con OpenAI y con Anthropic usando la misma interfaz. Python 3.12,
 streaming de tokens, validación con Pydantic y errores que no tiran abajo el programa.
-
-Pre-entrega 1 del curso AI Engineering de Coderhouse.
 
 ## El problema
 
@@ -256,7 +464,7 @@ cuatro dependencias y no quise agregar una quinta. Se resuelve con `python-doten
 ## Tests
 
 ```bash
-python -m pytest -q
+python -m pytest -q tests/test_llm_client.py
 ```
 
 Son 37 tests y corren sin API keys: los proveedores se reemplazan por dobles. Cubren los rangos de
