@@ -1,7 +1,5 @@
 # AI Engineering (Coderhouse)
 
-Proyecto integrador del curso. Cada pre-entrega se apoya en la anterior.
-
 | Entrega | Qué es | Dónde |
 |---|---|---|
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
@@ -177,8 +175,8 @@ y en la siguiente `["<UNKNOWN>"]`. Las dos salidas pasan la validación.
 Es esperable: la lista no está vacía, y Pydantic no tiene forma de saber que "Base de datos" es
 genérico y "PostgreSQL" no. Si esto importara en producción, habría que validar contra un catálogo
 de tecnologías conocidas, o agregar un paso que verifique que cada nombre aparece textualmente en el
-texto de entrada. Lo dejo anotado en vez de esconderlo, porque es justo lo que la prueba tenía que
-mostrar: el contrato garantiza la forma de la salida, no que sea verdad.
+texto de entrada. Lo dejo anotado en vez de taparlo. El esquema controla la forma de la salida; que
+los nombres sean ciertos es otro problema.
 
 También muestra por qué conviene fijar `temperature` en 0 donde el proveedor lo permite (en OpenAI
 está en 0; Anthropic ya no acepta el parámetro). Con un texto sin señal clara, dos corridas
