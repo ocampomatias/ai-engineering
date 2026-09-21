@@ -9,6 +9,13 @@ langchain-core>=1.6.3
 langchain-openai>=1.6.2
 langchain-anthropic>=1.7.2
 
+# Pre-entrega 3: RAG local
+langchain-chroma>=1.1.0
+chromadb>=1.5.9
+langchain-text-splitters>=1.1.2
+tiktoken>=0.14.0
+fastembed>=0.8.0
+
 # Desarrollo (para correr los tests, no hacen falta para usar el cliente)
 pytest>=8.0.0
 pytest-asyncio>=0.24.0

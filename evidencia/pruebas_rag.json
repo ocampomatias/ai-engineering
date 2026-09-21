@@ -1,0 +1,114 @@
+{
+  "fecha": "2026-09-21T18:34:50+00:00",
+  "proveedor": "anthropic",
+  "modelo": "claude-haiku-4-5",
+  "ingesta": {
+    "documentos": 4,
+    "fragmentos": 15,
+    "agregados": 0,
+    "eliminados": 0,
+    "reiniciada": false,
+    "duracion_ms": 591.7
+  },
+  "pruebas": [
+    {
+      "caso": "En los documentos: procedimiento de un incidente",
+      "paso": true,
+      "problemas": [],
+      "resultado": {
+        "pregunta": "¿Qué hay que hacer si la cola de pagos de RabbitMQ crece sin parar?",
+        "respuesta": "Si la cola de pagos crece sin parar, seguí este procedimiento:\n\n1. Revisar en Grafana el panel \"Workers de pagos\". Si hay menos de 24 réplicas, confirmar que el autoescalado funciona; si está trabado, escalar a mano con `kubectl scale deployment payments-worker --replicas=24 -n cobros`.\n\n2. Revisar la tasa de error de los workers. Si más del 20% falla, el problema no es de capacidad: pasar al paso 3.\n\n3. Mirar los logs en Loki filtrando por `level=error`. Las causas más comunes son falta de conexiones a PostgreSQL y timeouts del adquirente.\n\n4. Si el adquirente tiene timeouts, activar el adquirente de respaldo desde el feature flag `adquirente_respaldo_activo`. El cambio tarda ~2 minutos en propagarse.\n\n5. Si la cola supera 40.000 mensajes, declarar SEV1: a los 50.000 la API deja de aceptar cobros.",
+        "encontrada": true,
+        "referencias": [
+          {
+            "id_fragmento": "F1",
+            "fuente": "runbook-incidentes.md",
+            "seccion": "Procedimiento: la cola de pagos crece sin parar",
+            "similitud": 0.5894,
+            "extracto": "## Procedimiento: la cola de pagos crece sin parar Síntoma: la alerta `RabbitMQPaymentsBacklog` se dispara cuando la cola `payments` supera los 1.000 mensajes durante más de 5 minutos. 1. Revisar en Grafana el panel \"Workers de pagos\". Si hay menos de 24 réplicas, confirmar que el autoescalado es..."
+          },
+          {
+            "id_fragmento": "F2",
+            "fuente": "arquitectura.md",
+            "seccion": "Colas y procesamiento asíncrono",
+            "similitud": 0.5838,
+            "extracto": "## Colas y procesamiento asíncrono RabbitMQ 3.13 corre en un clúster de tres nodos con colas de tipo quorum. La cola `payments` tiene un límite de 50.000 mensajes; si se llena, la API deja de aceptar cobros nuevos y responde 503 para proteger la base de datos. Los mensajes que fallan cinco veces..."
+          }
+        ],
+        "metricas": {
+          "recuperacion_ms": 4980.1,
+          "generacion_ms": 4662.8,
+          "total_ms": 9706.7,
+          "intentos_llm": 1,
+          "fragmentos_recuperados": 4
+        }
+      }
+    },
+    {
+      "caso": "En los documentos: regla de despliegues",
+      "paso": true,
+      "problemas": [],
+      "resultado": {
+        "pregunta": "¿Puedo desplegar a producción un viernes a las 16:00?",
+        "respuesta": "No, no puedes desplegar a producción un viernes a las 16:00. Los viernes se puede desplegar entre las 10:00 y las 15:00 (hora de Buenos Aires). A las 16:00 ya está fuera de la ventana de despliegue.",
+        "encontrada": true,
+        "referencias": [
+          {
+            "id_fragmento": "F1",
+            "fuente": "politica-despliegues.md",
+            "seccion": "Ventanas de despliegue",
+            "similitud": 0.4696,
+            "extracto": "## Ventanas de despliegue Se puede desplegar a producción de lunes a jueves entre las 10:00 y las 17:00, y los viernes entre las 10:00 y las 15:00 (hora de Buenos Aires). Fuera de esos horarios no se despliega, porque hay menos gente disponible para responder si algo sale mal. Tampoco se desplieg..."
+          }
+        ],
+        "metricas": {
+          "recuperacion_ms": 139.5,
+          "generacion_ms": 1681.3,
+          "total_ms": 1840.3,
+          "intentos_llm": 1,
+          "fragmentos_recuperados": 4
+        }
+      }
+    },
+    {
+      "caso": "Pregunta trampa: tema cercano que los documentos no cubren",
+      "paso": true,
+      "problemas": [],
+      "resultado": {
+        "pregunta": "¿Qué CDN usa Tambor para servir el panel de comercios?",
+        "respuesta": "No lo sé.",
+        "encontrada": false,
+        "referencias": [],
+        "metricas": {
+          "recuperacion_ms": 112.4,
+          "generacion_ms": 965.6,
+          "total_ms": 1098.7,
+          "intentos_llm": 1,
+          "fragmentos_recuperados": 4
+        }
+      }
+    },
+    {
+      "caso": "Pregunta trampa: cultura general que el modelo sabe de memoria",
+      "paso": true,
+      "problemas": [],
+      "resultado": {
+        "pregunta": "¿En qué año se publicó la primera versión de PostgreSQL?",
+        "respuesta": "No lo sé.",
+        "encontrada": false,
+        "referencias": [],
+        "metricas": {
+          "recuperacion_ms": 189.5,
+          "generacion_ms": 3205.1,
+          "total_ms": 3410.1,
+          "intentos_llm": 1,
+          "fragmentos_recuperados": 4
+        }
+      }
+    }
+  ],
+  "async": {
+    "secuencial_ms": 9476,
+    "paralelo_ms": 4671
+  }
+}

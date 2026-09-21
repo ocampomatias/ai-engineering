@@ -1,0 +1,176 @@
+
+==============================================================================
+Ingesta de /data en ChromaDB
+==============================================================================
+INFO    | rag.ingesta | ingesta: 4 documento(s) leídos de data
+INFO    | rag.ingesta | ingesta: 15 fragmento(s), entre 158 y 478 tokens (tope 500, solapamiento 50)
+INFO    | rag.ingesta | ingesta: la colección ya tiene los 15 fragmentos actuales, no se reindexa nada
+INFO    | rag.ingesta | ingesta terminada en 592 ms
+{
+  "documentos": 4,
+  "fragmentos": 15,
+  "agregados": 0,
+  "eliminados": 0,
+  "reiniciada": false,
+  "duracion_ms": 591.7
+}
+
+==============================================================================
+En los documentos: procedimiento de un incidente
+==============================================================================
+Pregunta: ¿Qué hay que hacer si la cola de pagos de RabbitMQ crece sin parar?
+
+INFO    | rag.chain | consulta: '¿Qué hay que hacer si la cola de pagos de RabbitMQ crece sin parar?'
+INFO    | rag.embeddings | modelo de embeddings jinaai/jina-embeddings-v2-base-es cargado en 3.3 s
+INFO    | rag.chain | recuperación: 4 fragmento(s): F1=runbook-incidentes.md (0.59), F2=arquitectura.md (0.58), F3=arquitectura.md (0.58), F4=arquitectura.md (0.43)
+INFO    | rag.chain | recuperación terminada en 4980 ms
+INFO    | rag.chain | intento 1: llamando al modelo
+INFO    | rag.chain | intento 1: respuesta del modelo en 4663 ms (fin: end_turn, tokens: 2052 entrada / 319 salida)
+INFO    | rag.chain | validación OK: encontrada=True, 2 referencia(s) (F1, F2)
+INFO    | rag.chain | consulta resuelta en 9707 ms (recuperación 4980 ms, LLM 4663 ms, 1 intento(s)): respuesta encontrada
+
+Respuesta validada:
+{
+  "pregunta": "¿Qué hay que hacer si la cola de pagos de RabbitMQ crece sin parar?",
+  "respuesta": "Si la cola de pagos crece sin parar, seguí este procedimiento:\n\n1. Revisar en Grafana el panel \"Workers de pagos\". Si hay menos de 24 réplicas, confirmar que el autoescalado funciona; si está trabado, escalar a mano con `kubectl scale deployment payments-worker --replicas=24 -n cobros`.\n\n2. Revisar la tasa de error de los workers. Si más del 20% falla, el problema no es de capacidad: pasar al paso 3.\n\n3. Mirar los logs en Loki filtrando por `level=error`. Las causas más comunes son falta de conexiones a PostgreSQL y timeouts del adquirente.\n\n4. Si el adquirente tiene timeouts, activar el adquirente de respaldo desde el feature flag `adquirente_respaldo_activo`. El cambio tarda ~2 minutos en propagarse.\n\n5. Si la cola supera 40.000 mensajes, declarar SEV1: a los 50.000 la API deja de aceptar cobros.",
+  "encontrada": true,
+  "referencias": [
+    {
+      "id_fragmento": "F1",
+      "fuente": "runbook-incidentes.md",
+      "seccion": "Procedimiento: la cola de pagos crece sin parar",
+      "similitud": 0.5894,
+      "extracto": "## Procedimiento: la cola de pagos crece sin parar Síntoma: la alerta `RabbitMQPaymentsBacklog` se dispara cuando la cola `payments` supera los 1.000 mensajes durante más de 5 minutos. 1. Revisar en Grafana el panel \"Workers de pagos\". Si hay menos de 24 réplicas, confirmar que el autoescalado es..."
+    },
+    {
+      "id_fragmento": "F2",
+      "fuente": "arquitectura.md",
+      "seccion": "Colas y procesamiento asíncrono",
+      "similitud": 0.5838,
+      "extracto": "## Colas y procesamiento asíncrono RabbitMQ 3.13 corre en un clúster de tres nodos con colas de tipo quorum. La cola `payments` tiene un límite de 50.000 mensajes; si se llena, la API deja de aceptar cobros nuevos y responde 503 para proteger la base de datos. Los mensajes que fallan cinco veces..."
+    }
+  ],
+  "metricas": {
+    "recuperacion_ms": 4980.1,
+    "generacion_ms": 4662.8,
+    "total_ms": 9706.7,
+    "intentos_llm": 1,
+    "fragmentos_recuperados": 4
+  }
+}
+
+PASA
+
+==============================================================================
+En los documentos: regla de despliegues
+==============================================================================
+Pregunta: ¿Puedo desplegar a producción un viernes a las 16:00?
+
+INFO    | rag.chain | consulta: '¿Puedo desplegar a producción un viernes a las 16:00?'
+INFO    | rag.chain | recuperación: 4 fragmento(s): F1=politica-despliegues.md (0.47), F2=politica-despliegues.md (0.44), F3=politica-despliegues.md (0.35), F4=arquitectura.md (0.30)
+INFO    | rag.chain | recuperación terminada en 139 ms
+INFO    | rag.chain | intento 1: llamando al modelo
+INFO    | rag.chain | intento 1: respuesta del modelo en 1681 ms (fin: end_turn, tokens: 2442 entrada / 109 salida)
+INFO    | rag.chain | validación OK: encontrada=True, 1 referencia(s) (F1)
+INFO    | rag.chain | consulta resuelta en 1840 ms (recuperación 140 ms, LLM 1681 ms, 1 intento(s)): respuesta encontrada
+
+Respuesta validada:
+{
+  "pregunta": "¿Puedo desplegar a producción un viernes a las 16:00?",
+  "respuesta": "No, no puedes desplegar a producción un viernes a las 16:00. Los viernes se puede desplegar entre las 10:00 y las 15:00 (hora de Buenos Aires). A las 16:00 ya está fuera de la ventana de despliegue.",
+  "encontrada": true,
+  "referencias": [
+    {
+      "id_fragmento": "F1",
+      "fuente": "politica-despliegues.md",
+      "seccion": "Ventanas de despliegue",
+      "similitud": 0.4696,
+      "extracto": "## Ventanas de despliegue Se puede desplegar a producción de lunes a jueves entre las 10:00 y las 17:00, y los viernes entre las 10:00 y las 15:00 (hora de Buenos Aires). Fuera de esos horarios no se despliega, porque hay menos gente disponible para responder si algo sale mal. Tampoco se desplieg..."
+    }
+  ],
+  "metricas": {
+    "recuperacion_ms": 139.5,
+    "generacion_ms": 1681.3,
+    "total_ms": 1840.3,
+    "intentos_llm": 1,
+    "fragmentos_recuperados": 4
+  }
+}
+
+PASA
+
+==============================================================================
+Pregunta trampa: tema cercano que los documentos no cubren
+==============================================================================
+Pregunta: ¿Qué CDN usa Tambor para servir el panel de comercios?
+
+INFO    | rag.chain | consulta: '¿Qué CDN usa Tambor para servir el panel de comercios?'
+INFO    | rag.chain | recuperación: 4 fragmento(s): F1=arquitectura.md (0.59), F2=seguridad-y-accesos.md (0.49), F3=runbook-incidentes.md (0.41), F4=arquitectura.md (0.35)
+INFO    | rag.chain | recuperación terminada en 112 ms
+INFO    | rag.chain | intento 1: llamando al modelo
+INFO    | rag.chain | intento 1: respuesta del modelo en 966 ms (fin: end_turn, tokens: 2607 entrada / 41 salida)
+INFO    | rag.chain | validación OK: encontrada=False, 0 referencia(s)
+INFO    | rag.chain | consulta resuelta en 1099 ms (recuperación 112 ms, LLM 966 ms, 1 intento(s)): NO está en los documentos
+
+Respuesta validada:
+{
+  "pregunta": "¿Qué CDN usa Tambor para servir el panel de comercios?",
+  "respuesta": "No lo sé.",
+  "encontrada": false,
+  "referencias": [],
+  "metricas": {
+    "recuperacion_ms": 112.4,
+    "generacion_ms": 965.6,
+    "total_ms": 1098.7,
+    "intentos_llm": 1,
+    "fragmentos_recuperados": 4
+  }
+}
+
+PASA
+
+==============================================================================
+Pregunta trampa: cultura general que el modelo sabe de memoria
+==============================================================================
+Pregunta: ¿En qué año se publicó la primera versión de PostgreSQL?
+
+INFO    | rag.chain | consulta: '¿En qué año se publicó la primera versión de PostgreSQL?'
+INFO    | rag.chain | recuperación: 4 fragmento(s): F1=arquitectura.md (0.44), F2=runbook-incidentes.md (0.32), F3=politica-despliegues.md (0.18), F4=politica-despliegues.md (0.18)
+INFO    | rag.chain | recuperación terminada en 190 ms
+INFO    | rag.chain | intento 1: llamando al modelo
+INFO    | rag.chain | intento 1: respuesta del modelo en 3205 ms (fin: end_turn, tokens: 2576 entrada / 41 salida)
+INFO    | rag.chain | validación OK: encontrada=False, 0 referencia(s)
+INFO    | rag.chain | consulta resuelta en 3410 ms (recuperación 190 ms, LLM 3205 ms, 1 intento(s)): NO está en los documentos
+
+Respuesta validada:
+{
+  "pregunta": "¿En qué año se publicó la primera versión de PostgreSQL?",
+  "respuesta": "No lo sé.",
+  "encontrada": false,
+  "referencias": [],
+  "metricas": {
+    "recuperacion_ms": 189.5,
+    "generacion_ms": 3205.1,
+    "total_ms": 3410.1,
+    "intentos_llm": 1,
+    "fragmentos_recuperados": 4
+  }
+}
+
+PASA
+
+==============================================================================
+Async: 4 consultas una por una vs. en paralelo (asyncio.gather)
+==============================================================================
+Una por una: 9,476 ms
+En paralelo: 4,671 ms (2.0x más rápido)
+
+==============================================================================
+Resultado: 4/4 pruebas pasaron
+==============================================================================
+  PASA   En los documentos: procedimiento de un incidente
+  PASA   En los documentos: regla de despliegues
+  PASA   Pregunta trampa: tema cercano que los documentos no cubren
+  PASA   Pregunta trampa: cultura general que el modelo sabe de memoria
+
+Evidencia guardada en evidencia/pruebas_rag.json

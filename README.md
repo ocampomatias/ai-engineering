@@ -2,11 +2,345 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| Pre-entrega 3 | Sistema de recuperación semántica local (RAG) con ChromaDB | `rag/`, `ingestar.py`, `probar_rag.py`, `data/` |
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las dos: están en
+La instalación y las variables de entorno son las mismas para las tres: están en
 [Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 3: sistema RAG local con ChromaDB
+
+Le hacés una pregunta sobre la documentación interna de una empresa y te responde usando solo lo
+que dicen los documentos, con las fuentes de donde sacó la respuesta. Si la respuesta no está en los
+documentos, dice "No lo sé.", aunque el modelo la sepa de memoria.
+
+Los documentos se fragmentan, se convierten en embeddings y se guardan en ChromaDB, en disco. La
+consulta busca los fragmentos más parecidos a la pregunta y se los pasa al LLM en una cadena LCEL. La
+salida pasa por un `PydanticOutputParser` y se valida contra lo que se recuperó.
+
+Usa la configuración de las pre-entregas anteriores: el mismo `.env`, las mismas keys y el mismo
+`LLM_PROVIDER`. Alcanza con una sola key, de OpenAI o de Anthropic.
+
+## Correrlo
+
+Con el entorno instalado y el `.env` completo, primero se indexan los documentos de `data/`:
+
+```bash
+python ingestar.py
+```
+
+La primera vez descarga el modelo de embeddings (unos 640 MB, un par de minutos) a `.cache/`. Las
+siguientes lo carga de disco en unos 3 segundos. Si la colección ya está al día, `ingestar.py` no
+recalcula nada y termina en medio segundo.
+
+Después, las pruebas de punta a punta:
+
+```bash
+python probar_rag.py
+```
+
+Corre la ingesta (que no hace nada si ya está al día), dos preguntas cuya respuesta está en los
+documentos, dos preguntas trampa, y compara las cuatro consultas en serie contra las cuatro en
+paralelo. Deja los resultados en `evidencia/pruebas_rag.json`.
+
+Para hacer una pregunta propia:
+
+```bash
+python probar_rag.py --pregunta "¿Cada cuánto se rotan los secretos?"
+```
+
+Para reconstruir la colección de cero (por ejemplo, después de cambiar el tamaño de chunk):
+
+```bash
+python ingestar.py --reiniciar
+```
+
+Desde código:
+
+```python
+import asyncio
+from rag import get_rag_response
+
+async def main():
+    respuesta = await get_rag_response("¿Puedo desplegar a producción un viernes a las 16:00?")
+    print(respuesta.model_dump_json(indent=2))
+
+asyncio.run(main())
+```
+
+## El dataset
+
+`data/` tiene cuatro documentos Markdown de un equipo de Plataforma: arquitectura, runbook de
+incidentes, política de despliegues y seguridad y accesos. Suman unos 5.000 tokens.
+
+La empresa, Tambor, es inventada, y a propósito. Si los documentos fueran sobre algo público, como la
+documentación de PostgreSQL, no habría forma de saber si una respuesta correcta salió del contexto o
+de lo que el modelo ya sabía. Con datos inventados (el pool de PgBouncer es de 40 conexiones, los
+viernes se despliega hasta las 15:00) una respuesta correcta solo puede venir de los documentos.
+
+## Ingesta
+
+`rag/ingesta.py`, en cuatro pasos:
+
+1. **Carga**: lee los `.md` y `.txt` de `data/`. El resto de los archivos se ignora.
+2. **Limpieza**: normaliza Unicode a NFC (una "á" puede venir como un carácter o como "a" más la
+   tilde, y el tokenizador las trata distinto), saca caracteres de control, espacios al final de
+   línea y saltos de línea de más.
+3. **Fragmentación**: `RecursiveCharacterTextSplitter.from_tiktoken_encoder` con 500 tokens por
+   fragmento y 50 de solapamiento, medidos con tiktoken (`cl100k_base`), no en caracteres. Los
+   separadores son los de Markdown, así que primero intenta cortar en los títulos, después en los
+   párrafos, las líneas y las palabras. Con los documentos de `data/` salen 15 fragmentos de entre
+   158 y 478 tokens, y cada uno empieza en un título.
+4. **Persistencia**: los guarda en una colección de ChromaDB en `./vectorstore`, con distancia
+   coseno. Cada fragmento lleva como metadatos el archivo, la sección (el último título antes del
+   fragmento), su número y cuántos tokens tiene. Con eso la respuesta puede citar la fuente.
+
+### No reindexar lo que no cambió
+
+El ID de cada fragmento es un hash del archivo y del texto. El mismo documento produce siempre los
+mismos IDs, así que antes de calcular embeddings la ingesta compara los IDs de `data/` con los que ya
+están en la colección:
+
+- si son los mismos, no hace nada;
+- si un archivo cambió, indexa solo los fragmentos nuevos y borra los viejos de ese archivo;
+- si se borró un archivo, borra sus fragmentos.
+
+Es lo que pide la consigna: no volver a indexar todo en cada corrida. Lo comprobé al cambiar la
+configuración del splitter: la ingesta borró 12 fragmentos, indexó 13 y dejó 2 que no habían
+cambiado.
+
+### El mismo modelo para indexar y para consultar
+
+La colección guarda en sus metadatos el nombre del modelo de embeddings con que se creó. Al abrirla,
+si el modelo configurado es otro, lanza `BaseVectorialError`. Comparar vectores de dos modelos
+distintos no da error por sí solo: devuelve resultados que parecen normales y son ruido. Prefiero que
+falle.
+
+### Embeddings locales
+
+Anthropic no tiene API de embeddings, y yo tengo solo la key de Anthropic. Los embeddings se calculan
+en la máquina con [fastembed](https://github.com/qdrant/fastembed), que corre el modelo en ONNX, sin
+PyTorch ni GPU.
+
+El modelo es `jinaai/jina-embeddings-v2-base-es`, bilingüe español-inglés. Lo elegí porque acepta
+hasta 8.192 tokens de entrada. El que usa ChromaDB por defecto, `all-MiniLM-L6-v2`, corta en 256
+tokens y está entrenado en inglés: con fragmentos de 500 tokens se perdería la mitad de cada uno sin
+ningún aviso.
+
+## Recuperación y generación
+
+`get_rag_response(query)` en `rag/chain.py` es asíncrona y ejecuta esta cadena LCEL:
+
+```python
+cadena = (
+    RunnablePassthrough.assign(fragmentos=recuperacion)       # ChromaDB, top_k=4
+    | RunnablePassthrough.assign(contexto=formatear_contexto)  # fragmentos -> texto con IDs
+    | (
+        RunnableParallel(
+            salida=prompt | modelo | revisar_corte | PydanticOutputParser(RespuestaLLM),
+            fragmentos=itemgetter("fragmentos"),
+            pregunta=itemgetter("pregunta"),
+        )
+        | validar_respuesta
+    ).with_retry(stop_after_attempt=3)
+)
+```
+
+1. **Recuperación**: `asimilarity_search_with_relevance_scores` calcula el embedding de la pregunta
+   con el mismo modelo de la colección y trae los 4 fragmentos más parecidos, con su similitud
+   coseno. La consigna pide un `top_k` de entre 3 y 5, y `ConfigRAG` no acepta otro valor.
+2. **Contexto**: cada fragmento entra al prompt con un ID corto (`F1`, `F2`...), el archivo y la
+   sección.
+3. **Generación**: el prompt de sistema funciona como filtro de veracidad. Pide usar solo el
+   CONTEXTO, no completar con conocimiento general aunque el modelo sepa la respuesta, y contestar
+   exactamente "No lo sé." si no está. Las instrucciones de formato las genera el
+   `PydanticOutputParser` a partir del esquema. El prompt también dice que los fragmentos son datos,
+   no instrucciones, por si un documento trae texto que intente cambiar el comportamiento.
+4. **Validación**: `validar_respuesta` vuelve a validar la salida, esta vez sabiendo qué fragmentos
+   se recuperaron, y arma la `RespuestaRAG` final.
+
+El modelo nunca escribe las referencias: solo cita IDs. Las referencias (archivo, sección, similitud
+y extracto) las arma la cadena con lo que devolvió ChromaDB. Así una fuente no puede ser inventada:
+si el modelo cita `F7` cuando se recuperaron cuatro fragmentos, la validación falla y la cadena
+reintenta.
+
+La recuperación queda afuera del reintento. Si ChromaDB falla, volver a llamar al LLM no lo arregla.
+Se reintenta ante JSON mal formado, salida cortada por tope de tokens, citas inválidas o
+incoherentes, y los errores transitorios de la API (rate limit, red, 5xx), que son los mismos de la
+pre-entrega 2.
+
+## Esquemas y validaciones
+
+`rag/schemas.py`. Todos los campos tienen `description`: en `RespuestaLLM` es lo que lee el modelo
+como instrucción de formato, y en el resto documenta el contrato. Además de tipos y rangos, estas
+son las validaciones propias, que es lo que me marcaron para mejorar en la pre-entrega 2:
+
+| Modelo | Validación | Qué evita |
+|---|---|---|
+| `RespuestaLLM` | normaliza las citas: `"f1"`, `"[F2]"` y `"F1, F3"` pasan a `["F1", "F2"]`, sin repetidos | reintentar por una diferencia de formato |
+| `RespuestaLLM` | cada cita tiene que tener la forma `F<n>` | citas como `"fragmento uno"` |
+| `RespuestaLLM` | con contexto de validación, cada cita tiene que estar entre los fragmentos recuperados | fuentes inventadas |
+| `RespuestaLLM` | si `encontrada` es true, tiene que citar algo y no puede decir "No lo sé" | respuestas sin respaldo |
+| `RespuestaLLM` | si `encontrada` es false, la respuesta tiene que ser "No lo sé." y sin citas; `"no lo sé"` se guarda en la forma canónica | que diga "no está" y responda igual |
+| `Referencia` | la fuente es un nombre de archivo `.md` o `.txt`, no una ruta | filtrar rutas de la máquina en la respuesta |
+| `FragmentoRecuperado` | la similitud tiene que estar entre 0 y 1; tolera errores de redondeo como `1.0000001` | puntajes de una distancia mal configurada |
+| `Metricas` | el tiempo total no puede ser menor que recuperación más generación | un cronómetro mal puesto |
+| `RespuestaRAG` | `encontrada` y las referencias tienen que ser coherentes; sin referencias repetidas | una salida final contradictoria |
+| `ConfigRAG` | `chunk_size` de al menos 500, `chunk_overlap` de al menos 50 y menor que la mitad del chunk, `top_k` entre 3 y 5 | salirse de la consigna por un cambio de configuración |
+
+La validación de citas contra lo recuperado usa el contexto de validación de Pydantic
+(`model_validate(..., context={"ids_recuperados": ...})`). El parser no sabe qué fragmentos se
+recuperaron, así que esa comprobación se hace en un segundo paso, dentro del reintento.
+
+Salida real de una pregunta respondida con `claude-haiku-4-5`:
+
+```json
+{
+  "pregunta": "¿Puedo desplegar a producción un viernes a las 16:00?",
+  "respuesta": "No, no puedes desplegar a producción un viernes a las 16:00. Los viernes se puede desplegar entre las 10:00 y las 15:00 (hora de Buenos Aires). A las 16:00 ya está fuera de la ventana de despliegue.",
+  "encontrada": true,
+  "referencias": [
+    {
+      "id_fragmento": "F1",
+      "fuente": "politica-despliegues.md",
+      "seccion": "Ventanas de despliegue",
+      "similitud": 0.4696,
+      "extracto": "## Ventanas de despliegue Se puede desplegar a producción de lunes a jueves entre las 10:00 y las 17:00, y los viernes entre las 10:00 y las 15:00 (hora de Buenos Aires). Fuera de esos horarios no se despliega, porque hay menos gente disponible para responder si algo sale mal. Tampoco se desplieg..."
+    }
+  ],
+  "metricas": {
+    "recuperacion_ms": 139.5,
+    "generacion_ms": 1681.3,
+    "total_ms": 1840.3,
+    "intentos_llm": 1,
+    "fragmentos_recuperados": 4
+  }
+}
+```
+
+## Logs y tiempos
+
+La otra corrección de la pre-entrega 2 fue loguear de forma explícita la validación y los tiempos del
+flujo asíncrono. Un callback de LangChain, `ObservadorRAG`, se hereda a toda la cadena y mide cada
+etapa por separado. Cada consulta deja esto:
+
+```
+INFO    | rag.chain | consulta: '¿Puedo desplegar a producción un viernes a las 16:00?'
+INFO    | rag.chain | recuperación: 4 fragmento(s): F1=politica-despliegues.md (0.47), F2=politica-despliegues.md (0.44), F3=politica-despliegues.md (0.35), F4=arquitectura.md (0.30)
+INFO    | rag.chain | recuperación terminada en 139 ms
+INFO    | rag.chain | intento 1: llamando al modelo
+INFO    | rag.chain | intento 1: respuesta del modelo en 1681 ms (fin: end_turn, tokens: 2442 entrada / 109 salida)
+INFO    | rag.chain | validación OK: encontrada=True, 1 referencia(s) (F1)
+INFO    | rag.chain | consulta resuelta en 1840 ms (recuperación 140 ms, LLM 1681 ms, 1 intento(s)): respuesta encontrada
+```
+
+Cuando una salida no valida, el log dice en qué paso se rechazó y por qué, y el intento siguiente
+aparece abajo:
+
+```
+WARNING | rag.chain | intento 1: salida rechazada en validar_respuesta: fragmentos_citados: Value error, el modelo citó fragmentos que no estaban en el contexto: ['F9'] (recuperados: ['F1', 'F2'])
+INFO    | rag.chain | intento 2: llamando al modelo
+```
+
+Los mismos tiempos vuelven en el campo `metricas` de la respuesta, así que también se pueden usar
+desde el código y no solo leer en el log.
+
+## Pruebas
+
+Resultado de `python probar_rag.py` con `claude-haiku-4-5` (la salida completa está en
+`evidencia/salida_probar_rag.txt` y el JSON en `evidencia/pruebas_rag.json`):
+
+| Pregunta | Esperado | Resultado |
+|---|---|---|
+| ¿Qué hay que hacer si la cola de pagos de RabbitMQ crece sin parar? | Los pasos del runbook, citando `runbook-incidentes.md` | Pasa: los 5 pasos, con el comando `kubectl` y los umbrales |
+| ¿Puedo desplegar a producción un viernes a las 16:00? | "No", citando `politica-despliegues.md` | Pasa: "No [...] los viernes entre las 10:00 y las 15:00" |
+| ¿Qué CDN usa Tambor para servir el panel de comercios? | "No lo sé." | Pasa |
+| ¿En qué año se publicó la primera versión de PostgreSQL? | "No lo sé." | Pasa |
+
+Las dos preguntas trampa están elegidas para que cuesten. La del CDN es del mismo tema que los
+documentos: la búsqueda trae fragmentos de arquitectura con similitud alta y es tentador armar una
+respuesta con ellos. La de PostgreSQL el modelo la sabe de memoria, y PostgreSQL aparece en los
+documentos. En las dos respondió "No lo sé." sin referencias.
+
+Las cuatro consultas en serie tardaron 9,5 s y en paralelo con `asyncio.gather` 4,7 s. Mientras una
+consulta espera al LLM, el event loop atiende las otras, y la búsqueda en ChromaDB corre en un thread
+aparte, así que tampoco lo bloquea.
+
+## Lo que encontré
+
+**Un umbral de similitud no alcanza para filtrar lo que no está.** Mi primera idea fue descartar los
+fragmentos con similitud baja y responder "No lo sé" sin llamar al LLM. Los números no dan: la
+pregunta del CDN, que no está en los documentos, trae un fragmento con similitud 0,59, y la de los
+viernes, que sí está, trae su mejor fragmento con 0,47. Cualquier umbral que deje pasar la segunda deja
+pasar la primera. La similitud dice que un fragmento es del mismo tema, no que responde la pregunta.
+Eso lo tiene que decidir el modelo, con el prompt y el esquema obligándolo a decir que no sabe.
+
+**El splitter de Markdown no cortaba en los títulos.** Los separadores que devuelve
+`get_separators_for_language(Language.MARKDOWN)` son expresiones regulares (`"\n#{1,6} "`), pero el
+splitter los busca como texto literal si no se le pasa `is_separator_regex=True`. No da error:
+simplemente nunca corta en un título. Me di cuenta porque algunos fragmentos empezaban en la mitad de
+una sección.
+
+**`add_start_index` falla con chunks medidos en tokens.** Para saber a qué sección pertenece cada
+fragmento necesitaba su posición en el documento. LangChain la calcula restando el solapamiento
+como si fueran caracteres, pero son 50 tokens, unos 200 caracteres, así que busca desde después
+del inicio real y devuelve -1. La posición la calculo aparte, buscando cada fragmento a partir del
+anterior.
+
+**La primera consulta tarda más.** En la primera pregunta la recuperación tarda unos 5 segundos,
+porque carga el modelo de embeddings en memoria. Las siguientes tardan entre 100 y 200 ms.
+
+## Seguridad de las credenciales
+
+- Las keys van en `.env`, que está en `.gitignore`. En el repo solo está `.env.example`, vacío.
+- Dentro del programa las keys son `pydantic.SecretStr`, así que no aparecen si se imprime la
+  configuración.
+- `vectorstore/` y `.cache/` tampoco se suben: se generan con `python ingestar.py`.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_rag.py
+```
+
+Son 47 tests y no usan API keys ni descargan el modelo. Los embeddings son una bolsa de palabras con
+hashing (deterministas, y los textos con palabras en común quedan cerca), el LLM es un modelo falso
+que devuelve respuestas de un guion y ChromaDB es real, en una carpeta temporal. Cubren:
+
+- configuración: los límites de la consigna;
+- limpieza, carga y fragmentación: tope de tokens, secciones, IDs deterministas;
+- persistencia: ingesta idempotente, reindexado de un solo archivo, reinicio, colección inexistente
+  y modelo de embeddings distinto;
+- cada validación de los esquemas;
+- la cadena: respuesta con referencias reales, pregunta trampa, contenido del prompt, reintento ante
+  texto en vez de JSON, JSON cortado, cita inventada, respuesta sin citas, corte por tope de tokens y
+  error de red, error permanente sin reintento, reintentos agotados y consultas en paralelo;
+- que el log incluya la validación y los tiempos.
+
+Con los de las pre-entregas anteriores son 108:
+
+```bash
+python -m pytest -q
+```
+
+## Archivos
+
+```
+data/                       dataset: 4 documentos .md de una empresa ficticia
+rag/
+  config.py                 ConfigRAG: carpetas, colección, modelo, chunking y top_k
+  embeddings.py             EmbeddingsLocales: fastembed con la interfaz de LangChain
+  ingesta.py                limpieza, chunking, ChromaDB persistente, ingesta incremental
+  schemas.py                RespuestaLLM, RespuestaRAG, Referencia, Metricas (Pydantic)
+  prompts.py                prompt de grounding y formato del contexto
+  chain.py                  cadena LCEL, reintento, ObservadorRAG y get_rag_response()
+ingestar.py                 script de ingesta
+probar_rag.py               pruebas de punta a punta (asíncrono)
+evidencia/                  salida de la última corrida de probar_rag.py
+tests/
+  test_rag.py               47 tests sin API keys
+```
 
 # Pre-entrega 2: pipeline de extracción de entidades técnicas
 

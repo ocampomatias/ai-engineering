@@ -5,6 +5,10 @@
 .venv/
 venv/
 
+# Generados por la pre-entrega 3 (se rearman con `python ingestar.py`)
+vectorstore/
+.cache/
+
 # Python
 __pycache__/
 *.py[cod]
