@@ -1,0 +1,103 @@
+{
+  "descripcion": "Golden set del corpus de Tambor. Cada pregunta tiene el documento que la responde y un texto que aparece en el fragmento exacto. Las léxicas nombran un código o identificador; las semánticas usan otras palabras que el documento.",
+  "preguntas": [
+    {
+      "id": "error-idempotencia",
+      "pregunta": "¿Qué significa el error TMB-1009?",
+      "documento_id_esperado": "catalogo-errores",
+      "contiene": "codigo: TMB-1009",
+      "tipo": "lexica"
+    },
+    {
+      "id": "error-timeout-adquirente",
+      "pregunta": "Recibí un TMB-2012, ¿tengo que crear el cobro de nuevo?",
+      "documento_id_esperado": "catalogo-errores",
+      "contiene": "codigo: TMB-2012",
+      "tipo": "lexica"
+    },
+    {
+      "id": "alerta-pgbouncer",
+      "pregunta": "¿Qué condición dispara la alerta PgBouncerPoolSaturado?",
+      "documento_id_esperado": "observabilidad",
+      "contiene": "pool completo y más de 20 clientes esperando",
+      "tipo": "lexica"
+    },
+    {
+      "id": "header-firma",
+      "pregunta": "¿Cómo se calcula el header X-Tambor-Firma?",
+      "documento_id_esperado": "api-cobros",
+      "contiene": "HMAC-SHA256",
+      "tipo": "lexica"
+    },
+    {
+      "id": "comando-rollback",
+      "pregunta": "¿Cuándo se usa argocd app rollback?",
+      "documento_id_esperado": "politica-despliegues",
+      "contiene": "argocd app rollback",
+      "tipo": "lexica"
+    },
+    {
+      "id": "cola-dlq",
+      "pregunta": "¿Qué mensajes terminan en payments.dlq?",
+      "documento_id_esperado": "arquitectura",
+      "contiene": "payments.dlq",
+      "tipo": "lexica"
+    },
+    {
+      "id": "credito-caida-larga",
+      "pregunta": "Si la plataforma estuvo caída varios días del mes, ¿cuánto me descuentan de la factura?",
+      "documento_id_esperado": "sla-y-soporte",
+      "contiene": "crédito del 50 %",
+      "tipo": "semantica"
+    },
+    {
+      "id": "acceso-temporal",
+      "pregunta": "¿Por cuánto tiempo me dejan entrar a los servidores de producción?",
+      "documento_id_esperado": "seguridad-y-accesos",
+      "contiene": "dura como máximo 4 horas",
+      "tipo": "semantica"
+    },
+    {
+      "id": "cobro-doble",
+      "pregunta": "Mi sistema mandó el mismo pedido dos veces por un corte de red, ¿me van a cobrar doble?",
+      "documento_id_esperado": "api-cobros",
+      "contiene": "no termina en un cobro duplicado",
+      "tipo": "semantica"
+    },
+    {
+      "id": "quien-decide",
+      "pregunta": "¿Quién reparte las tareas cuando hay una caída grave?",
+      "documento_id_esperado": "runbook-incidentes",
+      "contiene": "toma las decisiones y reparte las tareas",
+      "tipo": "semantica"
+    },
+    {
+      "id": "retencion-registros",
+      "pregunta": "¿Cuánto tiempo se guardan los registros de las aplicaciones antes de borrarlos?",
+      "documento_id_esperado": "observabilidad",
+      "contiene": "1 año archivados en S3",
+      "tipo": "semantica"
+    },
+    {
+      "id": "rotacion-guardia",
+      "pregunta": "¿Cada cuánto cambia la persona que atiende las emergencias fuera de horario?",
+      "documento_id_esperado": "runbook-incidentes",
+      "contiene": "La guardia es semanal",
+      "tipo": "semantica"
+    },
+    {
+      "id": "flag-viejo",
+      "pregunta": "¿Qué pasa con una funcionalidad nueva que queda activada para todos durante meses?",
+      "documento_id_esperado": "politica-despliegues",
+      "contiene": "90 días encendido",
+      "tipo": "semantica"
+    },
+    {
+      "id": "plan-barato",
+      "pregunta": "¿En qué horario me atienden si contraté el plan más barato?",
+      "documento_id_esperado": "sla-y-soporte",
+      "contiene": "Plan Básico",
+      "tipo": "semantica"
+    }
+  ]
+}

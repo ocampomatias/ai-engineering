@@ -2,12 +2,349 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| Pre-entrega 4 | RAG escalable en Pinecone con búsqueda híbrida (BM25 + vectorial) y evaluación | `rag_pinecone/`, `setup_pinecone.py`, `ingestar_pinecone.py`, `evaluate.py`, `corpus/` |
 | Pre-entrega 3 | Sistema de recuperación semántica local (RAG) con ChromaDB | `rag/`, `ingestar.py`, `probar_rag.py`, `data/` |
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las tres: están en
+La instalación y las variables de entorno son las mismas para las cuatro: están en
 [Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 4: RAG escalable en Pinecone con búsqueda híbrida
+
+El RAG de la pre-entrega 3 pasa de ChromaDB local a un índice **Pinecone Serverless**, y la búsqueda
+deja de ser solo por similitud: un `RAGSystem` combina Pinecone con BM25 mediante un
+`EnsembleRetriever`. Un `evaluate.py` mide Recall@5 y Precision@5 sobre un golden set de 14
+preguntas. Todo lo que sigue sale de una corrida real contra Pinecone; las salidas completas están
+en `evidencia/`.
+
+## Replicar el índice
+
+Con el entorno instalado (ver [Instalación](#instalación)):
+
+1. Crear una cuenta gratis en [app.pinecone.io](https://app.pinecone.io) y una API key en
+   **API Keys**.
+2. Completar en el `.env` `PINECONE_API_KEY` e `INDEX_NAME` (ver `.env.example`). El resto tiene
+   defaults: namespace `plataforma`, `aws` / `us-east-1`, que es la región del plan gratuito.
+3. Crear el índice:
+
+```bash
+python setup_pinecone.py
+```
+
+Si no existe, lo crea en modo serverless, con dimensión 768 y métrica coseno, y espera a que esté
+listo. Si ya existe, comprueba que la dimensión, la métrica y el modelo de embeddings coincidan y no
+lo toca. Este paso es opcional: la ingesta lo hace igual.
+
+4. Subir el corpus:
+
+```bash
+python ingestar_pinecone.py
+```
+
+5. Evaluar:
+
+```bash
+python evaluate.py --detalle
+```
+
+Para una búsqueda puntual, con la posición que le dio cada recuperador y filtros opcionales:
+
+```bash
+python buscar_pinecone.py "¿Qué significa el error TMB-1009?" --categoria producto
+```
+
+Desde código:
+
+```python
+from rag_pinecone import RAGSystem
+
+sistema = RAGSystem()
+for doc in sistema.buscar("¿Cómo se calcula el header X-Tambor-Firma?"):
+    print(doc.metadata["fuente"], doc.metadata["seccion"])
+
+# Con filtro de metadatos (sintaxis de Pinecone), aplicado a las dos mitades
+sistema.buscar("límites de la API", filtro={"audiencia": {"$eq": "comercios"}})
+```
+
+## El corpus
+
+`corpus/` amplía el dataset de la pre-entrega 3 (la empresa ficticia Tambor) con tres formatos:
+
+| Archivo | Formato | Cómo se parte | Fragmentos |
+|---|---|---|---|
+| `arquitectura.md`, `politica-despliegues.md`, `runbook-incidentes.md`, `seguridad-y-accesos.md` | Markdown | splitter por títulos | 15 |
+| `api-cobros.md`, `observabilidad.md` | Markdown | splitter por títulos | 6 |
+| `catalogo-errores.json` | JSON | un fragmento por código de error | 14 |
+| `sla-y-soporte.pdf` | PDF de 3 páginas | una unidad por página, después el splitter | 3 |
+
+Los dos Markdown nuevos y el JSON tienen lo que le cuesta a una búsqueda por embeddings:
+identificadores exactos, como códigos de error (`TMB-2012`), nombres de alertas
+(`PgBouncerPoolSaturado`), headers (`X-Tambor-Firma`) y comandos. El PDF permite guardar la página
+como metadato. Lo generé con `fpdf2` a partir de un texto, pero la ingesta lo lee con `pypdf` como a
+cualquier PDF.
+
+`data/` no se tocó: sigue siendo el corpus de la pre-entrega 3 y su evidencia sigue valiendo.
+
+## Ingesta
+
+`rag_pinecone/carga.py` y `rag_pinecone/ingesta.py`.
+
+**Unidades antes del splitter.** Cada formato se parte primero en pedazos con sentido propio: el
+Markdown entero, cada página del PDF, cada registro del JSON. Recién ahí entra el mismo splitter de la
+pre-entrega 3: 500 tokens de tiktoken con 60 de solapamiento, cortando primero en los títulos. Un
+registro del JSON nunca se pega con el siguiente, porque un vector con dos códigos de error mezclados
+no representa bien a ninguno. Del PDF se sacan antes las líneas que se repiten en todas las páginas
+(el pie "página N de 3"), comparándolas con los números reemplazados.
+
+**Metadatos con esquema fijo.** Cada archivo tiene su entrada en `corpus/_metadatos.json`
+(categoría, audiencia, etiquetas y fecha de actualización). Un archivo sin entrada, o una entrada sin
+archivo, frena la ingesta. Cada vector se sube con exactamente estos campos, validados por el modelo
+Pydantic `MetadatosFragmento` con `extra="forbid"`:
+
+| Campo | Ejemplo | Para qué |
+|---|---|---|
+| `chunk_id` | `catalogo-errores#8a72db49124e` | ID del vector: documento + hash del contenido |
+| `documento_id`, `fuente`, `tipo` | `sla-y-soporte`, `sla-y-soporte.pdf`, `pdf` | citar la fuente; medir en la evaluación |
+| `categoria`, `audiencia`, `etiquetas` | `comercial`, `comercios`, `["sla", ...]` | filtrar (ej. solo documentos para comercios) |
+| `actualizado` | `20260701` | filtrar por fecha con `$gte` |
+| `pagina` | `2` | solo en PDFs |
+| `seccion`, `chunk`, `total_chunks`, `tokens` | `Compromiso de disponibilidad y créditos` | contexto del fragmento |
+| `texto` | el fragmento | la búsqueda devuelve el contenido sin consultar otra base |
+
+Dos decisiones que salieron de las limitaciones de Pinecone:
+
+- `actualizado` es un número `AAAAMMDD` y no un string `"2026-07-01"`, porque Pinecone solo compara
+  números con `$gt` / `$lt`.
+- `pagina` se omite en lo que no es PDF, en vez de ir en `null`, porque Pinecone no acepta `null`
+  en los metadatos. El esquema obliga a que esté en todos los PDF y en ningún otro archivo.
+
+Esto es lo que el módulo llama *schema drift*. Si un proceso guarda `fecha` y otro `actualizado`, un
+filtro por `actualizado` deja de encontrar la mitad de los documentos sin dar ningún error. Con el
+esquema cerrado, ese cambio falla al ingestar.
+
+**Lotes.** Los vectores se suben de a 100 por request (`tamano_lote`). Con 38 fragmentos es un
+solo lote, pero el código no cambia con 38.000. Pinecone limita un request a 1.000 vectores o 2 MB.
+
+**Incremental.** Los IDs son deterministas, así que antes de calcular embeddings la ingesta lista los
+IDs que ya están en el namespace (`index.list`), sube solo los nuevos y borra los que ya no existen.
+Una segunda corrida sin cambios no calcula ningún embedding:
+
+```
+ingesta: lote 1/1: 38 vectores (embeddings 14.8 s, upsert 2.17 s)
+ingesta: 38 vectores visibles en el namespace
+Índice 'tambor-docs', namespace 'plataforma': 8 documentos, 38 fragmentos (38 subidos en 1 lote(s), 0 borrados) en 22.8 s.
+
+# segunda corrida
+Índice 'tambor-docs', namespace 'plataforma': 8 documentos, 38 fragmentos (0 subidos en 0 lote(s), 0 borrados) en 5.5 s.
+No había cambios: no se calculó ningún embedding ni se subió nada.
+```
+
+**Namespace.** Todo va al namespace `plataforma`. `--reiniciar` vacía solo ese namespace, así que en
+el mismo índice puede convivir otro corpus, u otro entorno, sin mezclarse. Hay un test que lo
+comprueba.
+
+## Infraestructura y el modelo de embeddings
+
+Sigo sin key de OpenAI, así que los embeddings son los locales de la pre-entrega 3
+(`jinaai/jina-embeddings-v2-base-es`, con fastembed), que generan vectores de **768** dimensiones y
+no los 1.536 de `text-embedding-3-small` que menciona la consigna. Para no escribir ese número a mano,
+la dimensión del índice se mide con el modelo: se calcula un embedding y se cuenta su largo.
+
+Los errores de dimensión y de métrica que menciona el módulo se chequean al abrir el índice:
+
+- **Dimensión distinta**: un índice de 1.536 con un modelo de 768 da `IndiceError` antes de subir
+  nada, con el nombre de los dos números.
+- **Métrica distinta**: lo mismo si el índice existente no es coseno.
+- **Mismo tamaño, otro modelo**: es el caso que no da ningún error por sí solo. Si mañana cambio a
+  otro modelo de 768 dimensiones, Pinecone acepta los vectores y las búsquedas devuelven ruido. Por
+  eso el índice se crea con el tag `embeddings: jinaai_jina-embeddings-v2-base-es` y se valida en
+  cada apertura.
+
+La API key se lee del `.env` como `SecretStr`, así que no aparece si se imprime la configuración.
+Si falta, `ConfigError` dice dónde crearla.
+
+## Recuperador híbrido: `RAGSystem`
+
+`rag_pinecone/sistema.py`:
+
+```
+consulta ─┬─> PineconeVectorStore (coseno, top 10)  ─┐
+          └─> BM25Retriever (léxico, top 10)        ─┴─> EnsembleRetriever (RRF, pesos 0,5 / 0,5) -> top 5
+```
+
+- **Vectorial**: `PineconeVectorStore` sobre el índice y el namespace de la ingesta, con
+  `text_key="texto"`.
+- **Léxica**: `BM25Retriever`. BM25 necesita todo el corpus en memoria; se arma leyendo los
+  fragmentos del mismo namespace de Pinecone (`list` + `fetch`), así las dos mitades ven siempre el
+  mismo corpus y no hay una segunda fuente de verdad.
+- **Fusión**: `EnsembleRetriever` con Reciprocal Rank Fusion: cada fragmento suma
+  `peso / (60 + posición)` por cada lista en la que aparece. Usa posiciones y no puntajes, porque un
+  12,3 de BM25 y un 0,81 de coseno no están en la misma escala. Uso `id_key="chunk_id"` para que un
+  mismo fragmento que llega por las dos vías se cuente una vez.
+
+Tres cambios sobre BM25 tal como viene:
+
+1. **Tokenizador propio.** El de LangChain es `texto.split()`, así que `"TMB-1009?"` y `"TMB-1009"`
+   son tokens distintos y `"rotación"` no coincide con `"rotacion"`. El mío pasa a minúsculas, saca
+   tildes y stopwords, y deja los compuestos enteros y partidos: `TMB-1009` da `tmb-1009`, `tmb` y
+   `1009`.
+2. **Sin puntajes 0.** `BM25Retriever` devuelve siempre k documentos, aunque no compartan ni una
+   palabra con la consulta. En la fusión esos documentos suman puntaje RRF solo por estar en la
+   lista, así que los descarto.
+3. **El mismo filtro que Pinecone.** Si la parte vectorial filtra por categoría y BM25 no, la fusión
+   mete fragmentos de otras categorías. `cumple_filtro` evalúa la sintaxis de filtros de Pinecone
+   (`$eq`, `$in`, `$gte`, `$and`, etc.) sobre los metadatos en memoria.
+
+`buscar(consulta, k=5, filtro=None, modo="hibrido")` acepta además `modo="vectorial"` y
+`modo="bm25"`, que es lo que usa la evaluación para comparar. `explicar()` devuelve el top 5 con la
+posición que le dio cada recuperador. Así se ve con un filtro, en `evidencia/salida_buscar_pinecone.txt`:
+
+```
+Consulta: ¿Cuánto tiempo tengo para reclamar?
+Filtro: {'$and': [{'audiencia': {'$eq': 'comercios'}}, {'actualizado': {'$gte': 20260701}}]}
+
+1. sla-y-soporte.pdf, página 1 — SLA y soporte para comercios  [RRF 0.0161 | Pinecone #3 · BM25 #1]
+2. sla-y-soporte.pdf, página 3 — Exclusiones, mantenimiento y escalamiento  [RRF 0.0082 | Pinecone #1 · BM25 #-]
+3. catalogo-errores.json — TMB-2012  [RRF 0.0081 | Pinecone #2 · BM25 #-]
+...
+```
+
+## Evaluación
+
+`evaluacion/golden_set.json` tiene 14 preguntas con el formato que pide la consigna
+(`pregunta`, `documento_id_esperado`) y dos campos más:
+
+- `contiene`: un texto que aparece en el fragmento exacto que responde. `evaluate.py` comprueba antes
+  de medir que ese texto esté en el documento esperado, y un test hace lo mismo.
+- `tipo`: `lexica` (6 preguntas que nombran un código, un header, una alerta o un comando) o
+  `semantica` (8 que usan otras palabras que el documento, como "¿cuánto me descuentan si la
+  plataforma estuvo caída?" para la tabla de créditos del SLA).
+
+Métricas, con k = 5:
+
+- **Recall@5**: la pregunta suma 1 si al menos un fragmento del top 5 es del documento esperado.
+- **Precision@5**: fracción de los 5 que son del documento esperado. Se divide por 5 aunque vengan
+  menos.
+- **F1**, **MRR** (1 / posición del primer acierto) y **acierto de fragmento@5** (si vino el
+  fragmento que contiene la respuesta, no solo el documento).
+
+### Resultados
+
+`python evaluate.py --detalle`, contra Pinecone (salida completa en `evidencia/salida_evaluate.txt`,
+JSON en `evidencia/evaluacion_pinecone.json`):
+
+| Modo | Recall@5 | Precision@5 | F1 | MRR | Fragmento@5 | ms / consulta |
+|---|---|---|---|---|---|---|
+| Híbrido (0,5 / 0,5) | **100 %** | 47,1 % | 0,641 | 0,845 | 92,9 % | 336 |
+| Solo vectorial (Pinecone) | **100 %** | **51,4 %** | **0,679** | 0,845 | **100 %** | 249 |
+| Solo BM25 | 92,9 % | 40,0 % | 0,559 | 0,839 | 85,7 % | 1 |
+
+Por tipo de pregunta (Recall@5 / MRR):
+
+| Tipo | Híbrido | Vectorial | BM25 |
+|---|---|---|---|
+| Léxicas (6) | 100 % / **0,92** | 100 % / 0,83 | 100 % / **1,00** |
+| Semánticas (8) | 100 % / 0,79 | 100 % / **0,85** | 87,5 % / 0,72 |
+
+La Precision@5 máxima posible con este corpus es 71,4 %: cinco de los ocho documentos tienen 3
+fragmentos, y con k = 5 una pregunta sobre ellos no puede pasar de 0,6.
+
+## Lo que encontré
+
+**El híbrido no le ganó al vectorial en este corpus.** Esperaba lo contrario y no toqué el golden set
+para que cambiara. Los dos llegan a Recall@5 de 100 %, pero el vectorial solo tiene mejor precisión y
+trae siempre el fragmento exacto. Mirando pregunta por pregunta, el reparto es claro:
+
+- En las **léxicas** BM25 es imbatible (MRR 1,00: siempre pone el documento correcto primero) y el
+  híbrido mejora al vectorial (0,92 contra 0,83). Es lo que promete la búsqueda híbrida.
+- En las **semánticas** BM25 mete ruido. En "¿Qué pasa con una funcionalidad nueva que queda activada
+  para todos durante meses?", BM25 pone primero la sección *Ventanas de despliegue*, por palabras
+  sueltas que comparte con la pregunta, y la fusión la sube al primer puesto. La sección que responde,
+  *Feature flags*, la trae Pinecone, pero termina afuera del top 5.
+
+Con un corpus de 38 fragmentos y un modelo de embeddings bueno, la parte vectorial ya resuelve casi
+todo, y los códigos exactos son pocos. En un corpus grande, con cientos de códigos de error parecidos
+entre sí, la balanza debería inclinarse al revés. Hoy, si tuviera que elegir por las métricas, usaría
+el vectorial solo; el híbrido lo justifican las consultas por identificador exacto.
+
+**Con pesos iguales, RRF empata #1 con #2.** En "Recibí un TMB-2012, ¿tengo que crear el cobro de
+nuevo?", BM25 pone el registro de `TMB-2012` primero y Pinecone lo pone segundo, detrás de la tabla
+de endpoints (la pregunta dice "crear el cobro"). Con pesos 0,5 / 0,5, los dos fragmentos suman
+exactamente lo mismo (1/61 + 1/62), y el empate lo gana el que aparece primero en la lista del
+primer recuperador. Probé otros pesos contra el mismo índice (`--peso-vectorial`): con 0,7 para el vectorial
+el MRR sube a 0,881 pero la precisión baja a 44,3 %; con 0,3, el Recall@5 cae a 92,9 %. Dejé 0,5, porque
+ajustar el peso con 14 preguntas sería ajustarlo a estas 14 preguntas.
+
+**`BM25Retriever` devuelve documentos que no tienen nada que ver.** Sin el cambio que descarta los
+puntajes 0, una consulta como "zzz" devuelve igual 10 fragmentos, y en la fusión cada uno suma algo.
+
+**Pinecone es eventualmente consistente.** Un vector recién subido tarda unos segundos en aparecer
+en `list` y en las búsquedas. Si la evaluación corre justo después de la ingesta, puede medir un
+índice a medio llenar sin dar ningún error. La ingesta espera a que `describe_index_stats` muestre la
+cantidad esperada antes de terminar.
+
+**El tag del índice no es un `dict`.** `describe_index().tags` devuelve un modelo propio del SDK; con
+`dict(...)` falla. Lo encontré en la primera corrida contra Pinecone, porque el índice falso de los
+tests devolvía un `dict`.
+
+**Límite de escala conocido.** BM25 vive en memoria y se arma leyendo todo el namespace al crear el
+`RAGSystem`. Con 38 fragmentos es instantáneo; con millones no. A esa escala la parte léxica tendría
+que ser un índice híbrido de Pinecone (vectores densos más *sparse*) o un motor aparte, como
+Elasticsearch.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_rag_pinecone.py
+```
+
+Son 62 tests sin API keys y sin red. Pinecone es un índice falso en memoria, con la misma interfaz
+que usa el código (`upsert`, `query`, `list`, `fetch`, `delete`, `describe_index_stats`), similitud
+coseno y los filtros de Pinecone. `PineconeVectorStore`, `BM25Retriever` y `EnsembleRetriever` son
+los reales. Cubren:
+
+- configuración: límites, key faltante, que la key no aparezca en el `repr`;
+- catálogo: archivo sin metadatos, metadatos sin archivo, categoría inválida, campo extra;
+- carga: secciones del Markdown, un fragmento por registro del JSON, página y pie del PDF, IDs
+  deterministas, que `pagina` no vaya como `null`;
+- el esquema de metadatos (schema drift, página en un Markdown, PDF sin página, ID de otro
+  documento);
+- tokenizador y filtros;
+- infraestructura: crea el índice serverless con tags, y falla con otra dimensión, otra métrica u
+  otro modelo;
+- ingesta: lotes, texto en los metadatos, idempotencia, reindexado parcial, reinicio sin tocar
+  otros namespaces;
+- `RAGSystem`: índice inexistente o vacío, top k sin repetidos, BM25 con el código exacto, fusión,
+  filtros en las dos mitades, filtro por página, versión asíncrona;
+- métricas, y que el golden set real sea válido y sus respuestas existan en el corpus.
+
+Con los de las pre-entregas anteriores son 170:
+
+```bash
+python -m pytest -q
+```
+
+## Archivos
+
+```
+corpus/                     8 documentos (.md, .json, .pdf) y _metadatos.json
+rag_pinecone/
+  config.py                 ConfigPinecone: key, índice, namespace, chunking, pesos de la fusión
+  schemas.py                MetadatosDocumento, MetadatosFragmento (esquema fijo), ResumenIngesta
+  carga.py                  catálogo, lectores de Markdown / PDF / JSON y fragmentación
+  infra.py                  crear y validar el índice serverless
+  ingesta.py                embeddings y upsert por lotes, incremental, por namespace
+  sistema.py                RAGSystem: Pinecone + BM25 + EnsembleRetriever, filtros
+  metricas.py               golden set, Recall@k, Precision@k, F1, MRR
+setup_pinecone.py           inicialización del índice
+ingestar_pinecone.py        ingesta
+evaluate.py                 evaluación: híbrido vs. vectorial vs. BM25
+buscar_pinecone.py          búsqueda puntual con explicación y filtros
+evaluacion/golden_set.json  14 preguntas con su documento esperado
+evidencia/                  salidas de la corrida contra Pinecone
+tests/test_rag_pinecone.py  62 tests sin red
+```
 
 # Pre-entrega 3: sistema RAG local con ChromaDB
 
@@ -616,6 +953,10 @@ En PowerShell, `Copy-Item .env.example .env`. En Linux o macOS, `cp .env.example
 | `OPENAI_MODEL` | `gpt-4o-mini` | ID del modelo de OpenAI |
 | `ANTHROPIC_MODEL` | `claude-haiku-4-5` | ID del modelo de Anthropic |
 | `MAX_CONCURRENCY` | `5` | Cuántas llamadas pueden viajar a la vez |
+| `PINECONE_API_KEY` | vacío | Key de Pinecone (pre-entrega 4) |
+| `INDEX_NAME` | `tambor-docs` | Índice serverless de Pinecone; si no existe, se crea |
+| `PINECONE_NAMESPACE` | `plataforma` | Partición del índice donde va el corpus |
+| `PINECONE_CLOUD` / `PINECONE_REGION` | `aws` / `us-east-1` | Dónde se crea el índice (la región del plan gratuito) |
 
 Los dos modelos por defecto son los más baratos de cada proveedor, que para probar el cliente
 alcanzan de sobra. Si necesitás más capacidad, cambiá `ANTHROPIC_MODEL` o `OPENAI_MODEL` en el

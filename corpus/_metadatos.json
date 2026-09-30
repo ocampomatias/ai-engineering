@@ -1,0 +1,50 @@
+{
+  "arquitectura.md": {
+    "categoria": "arquitectura",
+    "audiencia": "interna",
+    "etiquetas": ["servicios", "postgresql", "rabbitmq", "redis", "kubernetes"],
+    "actualizado": "2026-08-01"
+  },
+  "politica-despliegues.md": {
+    "categoria": "procesos",
+    "audiencia": "interna",
+    "etiquetas": ["despliegues", "canary", "rollback", "feature-flags"],
+    "actualizado": "2026-07-15"
+  },
+  "runbook-incidentes.md": {
+    "categoria": "operaciones",
+    "audiencia": "interna",
+    "etiquetas": ["incidentes", "guardias", "severidad", "postmortem"],
+    "actualizado": "2026-08-10"
+  },
+  "seguridad-y-accesos.md": {
+    "categoria": "seguridad",
+    "audiencia": "interna",
+    "etiquetas": ["pci-dss", "secretos", "accesos", "auditoria"],
+    "actualizado": "2026-06-30"
+  },
+  "observabilidad.md": {
+    "categoria": "operaciones",
+    "audiencia": "interna",
+    "etiquetas": ["slo", "alertas", "metricas", "logs", "trazas"],
+    "actualizado": "2026-08-20"
+  },
+  "api-cobros.md": {
+    "categoria": "producto",
+    "audiencia": "comercios",
+    "etiquetas": ["api", "autenticacion", "idempotencia", "webhooks", "limites"],
+    "actualizado": "2026-09-01"
+  },
+  "catalogo-errores.json": {
+    "categoria": "producto",
+    "audiencia": "comercios",
+    "etiquetas": ["api", "errores"],
+    "actualizado": "2026-09-01"
+  },
+  "sla-y-soporte.pdf": {
+    "categoria": "comercial",
+    "audiencia": "comercios",
+    "etiquetas": ["sla", "soporte", "creditos", "mantenimiento"],
+    "actualizado": "2026-07-01"
+  }
+}

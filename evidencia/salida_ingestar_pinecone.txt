@@ -1,0 +1,9 @@
+INFO    | rag_pinecone.carga | carga: se descartan 1 línea(s) repetidas en todas las páginas
+INFO    | rag_pinecone.carga | carga: 8 documento(s), 38 fragmento(s) (14 json, 21 markdown, 3 pdf), entre 85 y 488 tokens
+INFO    | rag.embeddings | modelo de embeddings jinaai/jina-embeddings-v2-base-es cargado en 2.2 s
+INFO    | rag_pinecone.infra | infra: índice 'tambor-docs' listo (dimensión 768, métrica cosine, host tambor-docs-otkbxf9.svc.aped-4627-b74a.pinecone.io)
+INFO    | rag_pinecone.ingesta | ingesta: lote 1/1: 38 vectores (embeddings 14.8 s, upsert 2.17 s)
+INFO    | rag_pinecone.ingesta | ingesta: 38 vectores visibles en el namespace
+INFO    | rag_pinecone.ingesta | ingesta terminada en 22.8 s
+
+Índice 'tambor-docs', namespace 'plataforma': 8 documentos, 38 fragmentos (38 subidos en 1 lote(s), 0 borrados) en 22.8 s.

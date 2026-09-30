@@ -1,0 +1,745 @@
+{
+  "k": 5,
+  "indice": "tambor-docs",
+  "namespace": "plataforma",
+  "fragmentos": 38,
+  "pesos": [
+    0.5,
+    0.5
+  ],
+  "precision_maxima_posible": 0.7143,
+  "modos": {
+    "hibrido": {
+      "total": {
+        "k": 5,
+        "preguntas": 14,
+        "recall": 1.0,
+        "precision": 0.4714,
+        "f1": 0.6408,
+        "mrr": 0.8452,
+        "acierto_fragmento": 0.9286
+      },
+      "por_tipo": {
+        "lexica": {
+          "k": 5,
+          "preguntas": 6,
+          "recall": 1.0,
+          "precision": 0.6333,
+          "f1": 0.7755,
+          "mrr": 0.9167,
+          "acierto_fragmento": 1.0
+        },
+        "semantica": {
+          "k": 5,
+          "preguntas": 8,
+          "recall": 1.0,
+          "precision": 0.35,
+          "f1": 0.5185,
+          "mrr": 0.7917,
+          "acierto_fragmento": 0.875
+        }
+      },
+      "ms_por_consulta": 336.2,
+      "preguntas": [
+        {
+          "id": "error-idempotencia",
+          "recall": 1.0,
+          "precision": 1.0,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "error-timeout-adquirente",
+          "recall": 1.0,
+          "precision": 0.8,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "api-cobros",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "alerta-pgbouncer",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "observabilidad",
+            "runbook-incidentes",
+            "runbook-incidentes",
+            "observabilidad",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "header-firma",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "api-cobros",
+            "api-cobros",
+            "api-cobros",
+            "arquitectura",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "comando-rollback",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "runbook-incidentes",
+            "api-cobros",
+            "politica-despliegues",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "cola-dlq",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "arquitectura",
+            "runbook-incidentes",
+            "arquitectura",
+            "catalogo-errores",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "credito-caida-larga",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "observabilidad",
+            "sla-y-soporte",
+            "observabilidad",
+            "sla-y-soporte",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "acceso-temporal",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "seguridad-y-accesos",
+            "seguridad-y-accesos",
+            "politica-despliegues",
+            "arquitectura",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "cobro-doble",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "api-cobros",
+            "arquitectura",
+            "api-cobros",
+            "arquitectura",
+            "seguridad-y-accesos"
+          ]
+        },
+        {
+          "id": "quien-decide",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "runbook-incidentes",
+            "runbook-incidentes",
+            "politica-despliegues",
+            "runbook-incidentes",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "retencion-registros",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "seguridad-y-accesos",
+            "observabilidad",
+            "arquitectura",
+            "runbook-incidentes",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "rotacion-guardia",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 0.3333333333333333,
+          "acierto_fragmento": 1.0,
+          "posicion": 3,
+          "documentos": [
+            "sla-y-soporte",
+            "observabilidad",
+            "runbook-incidentes",
+            "politica-despliegues",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "flag-viejo",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 0.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "sla-y-soporte",
+            "observabilidad",
+            "seguridad-y-accesos",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "plan-barato",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "sla-y-soporte",
+            "sla-y-soporte",
+            "politica-despliegues",
+            "observabilidad",
+            "api-cobros"
+          ]
+        }
+      ]
+    },
+    "vectorial": {
+      "total": {
+        "k": 5,
+        "preguntas": 14,
+        "recall": 1.0,
+        "precision": 0.5143,
+        "f1": 0.6792,
+        "mrr": 0.8452,
+        "acierto_fragmento": 1.0
+      },
+      "por_tipo": {
+        "lexica": {
+          "k": 5,
+          "preguntas": 6,
+          "recall": 1.0,
+          "precision": 0.6,
+          "f1": 0.75,
+          "mrr": 0.8333,
+          "acierto_fragmento": 1.0
+        },
+        "semantica": {
+          "k": 5,
+          "preguntas": 8,
+          "recall": 1.0,
+          "precision": 0.45,
+          "f1": 0.6207,
+          "mrr": 0.8542,
+          "acierto_fragmento": 1.0
+        }
+      },
+      "ms_por_consulta": 249.2,
+      "preguntas": [
+        {
+          "id": "error-idempotencia",
+          "recall": 1.0,
+          "precision": 1.0,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "error-timeout-adquirente",
+          "recall": 1.0,
+          "precision": 0.8,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "api-cobros",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "alerta-pgbouncer",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "runbook-incidentes",
+            "observabilidad",
+            "runbook-incidentes",
+            "arquitectura",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "header-firma",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "api-cobros",
+            "api-cobros",
+            "arquitectura",
+            "api-cobros",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "comando-rollback",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "politica-despliegues",
+            "sla-y-soporte",
+            "api-cobros",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "cola-dlq",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "arquitectura",
+            "api-cobros",
+            "arquitectura",
+            "api-cobros",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "credito-caida-larga",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 0.3333333333333333,
+          "acierto_fragmento": 1.0,
+          "posicion": 3,
+          "documentos": [
+            "observabilidad",
+            "runbook-incidentes",
+            "sla-y-soporte",
+            "observabilidad",
+            "sla-y-soporte"
+          ]
+        },
+        {
+          "id": "acceso-temporal",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "seguridad-y-accesos",
+            "seguridad-y-accesos",
+            "seguridad-y-accesos",
+            "sla-y-soporte",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "cobro-doble",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "api-cobros",
+            "api-cobros",
+            "arquitectura",
+            "runbook-incidentes",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "quien-decide",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "runbook-incidentes",
+            "runbook-incidentes",
+            "sla-y-soporte",
+            "runbook-incidentes",
+            "seguridad-y-accesos"
+          ]
+        },
+        {
+          "id": "retencion-registros",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "observabilidad",
+            "politica-despliegues",
+            "seguridad-y-accesos",
+            "runbook-incidentes",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "rotacion-guardia",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "sla-y-soporte",
+            "runbook-incidentes",
+            "runbook-incidentes",
+            "observabilidad",
+            "seguridad-y-accesos"
+          ]
+        },
+        {
+          "id": "flag-viejo",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "sla-y-soporte",
+            "politica-despliegues",
+            "seguridad-y-accesos",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "plan-barato",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "sla-y-soporte",
+            "sla-y-soporte",
+            "politica-despliegues",
+            "sla-y-soporte",
+            "api-cobros"
+          ]
+        }
+      ]
+    },
+    "bm25": {
+      "total": {
+        "k": 5,
+        "preguntas": 14,
+        "recall": 0.9286,
+        "precision": 0.4,
+        "f1": 0.5591,
+        "mrr": 0.8393,
+        "acierto_fragmento": 0.8571
+      },
+      "por_tipo": {
+        "lexica": {
+          "k": 5,
+          "preguntas": 6,
+          "recall": 1.0,
+          "precision": 0.5,
+          "f1": 0.6667,
+          "mrr": 1.0,
+          "acierto_fragmento": 1.0
+        },
+        "semantica": {
+          "k": 5,
+          "preguntas": 8,
+          "recall": 0.875,
+          "precision": 0.325,
+          "f1": 0.474,
+          "mrr": 0.7188,
+          "acierto_fragmento": 0.75
+        }
+      },
+      "ms_por_consulta": 0.9,
+      "preguntas": [
+        {
+          "id": "error-idempotencia",
+          "recall": 1.0,
+          "precision": 0.8,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "catalogo-errores",
+            "api-cobros",
+            "catalogo-errores",
+            "catalogo-errores",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "error-timeout-adquirente",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "catalogo-errores",
+            "api-cobros",
+            "catalogo-errores",
+            "catalogo-errores",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "alerta-pgbouncer",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "observabilidad",
+            "runbook-incidentes",
+            "observabilidad",
+            "runbook-incidentes",
+            "runbook-incidentes"
+          ]
+        },
+        {
+          "id": "header-firma",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "api-cobros",
+            "api-cobros",
+            "sla-y-soporte",
+            "catalogo-errores",
+            "api-cobros"
+          ]
+        },
+        {
+          "id": "comando-rollback",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "arquitectura",
+            "runbook-incidentes",
+            "api-cobros",
+            "seguridad-y-accesos"
+          ]
+        },
+        {
+          "id": "cola-dlq",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "arquitectura",
+            "runbook-incidentes",
+            "observabilidad",
+            "catalogo-errores",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "credito-caida-larga",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "sla-y-soporte",
+            "sla-y-soporte",
+            "observabilidad",
+            "observabilidad",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "acceso-temporal",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "seguridad-y-accesos",
+            "sla-y-soporte",
+            "api-cobros",
+            "seguridad-y-accesos",
+            "politica-despliegues"
+          ]
+        },
+        {
+          "id": "cobro-doble",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 0.5,
+          "acierto_fragmento": 1.0,
+          "posicion": 2,
+          "documentos": [
+            "arquitectura",
+            "api-cobros",
+            "seguridad-y-accesos",
+            "catalogo-errores",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "quien-decide",
+          "recall": 1.0,
+          "precision": 0.6,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "runbook-incidentes",
+            "runbook-incidentes",
+            "politica-despliegues",
+            "runbook-incidentes",
+            "arquitectura"
+          ]
+        },
+        {
+          "id": "retencion-registros",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 0.25,
+          "acierto_fragmento": 1.0,
+          "posicion": 4,
+          "documentos": [
+            "seguridad-y-accesos",
+            "arquitectura",
+            "sla-y-soporte",
+            "observabilidad",
+            "observabilidad"
+          ]
+        },
+        {
+          "id": "rotacion-guardia",
+          "recall": 0.0,
+          "precision": 0.0,
+          "reciprocal_rank": 0.0,
+          "acierto_fragmento": 0.0,
+          "posicion": null,
+          "documentos": [
+            "sla-y-soporte",
+            "catalogo-errores",
+            "observabilidad",
+            "api-cobros",
+            "sla-y-soporte"
+          ]
+        },
+        {
+          "id": "flag-viejo",
+          "recall": 1.0,
+          "precision": 0.2,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 0.0,
+          "posicion": 1,
+          "documentos": [
+            "politica-despliegues",
+            "observabilidad",
+            "arquitectura",
+            "observabilidad",
+            "catalogo-errores"
+          ]
+        },
+        {
+          "id": "plan-barato",
+          "recall": 1.0,
+          "precision": 0.4,
+          "reciprocal_rank": 1.0,
+          "acierto_fragmento": 1.0,
+          "posicion": 1,
+          "documentos": [
+            "sla-y-soporte",
+            "observabilidad",
+            "politica-despliegues",
+            "sla-y-soporte",
+            "politica-despliegues"
+          ]
+        }
+      ]
+    }
+  }
+}

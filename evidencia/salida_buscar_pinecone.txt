@@ -1,0 +1,52 @@
+
+Consulta: Recibí un TMB-2012, ¿tengo que crear el cobro de nuevo?
+
+1. api-cobros.md — Endpoints principales  [RRF 0.0163 | Pinecone #1 · BM25 #2]
+   ## Endpoints principales | Método | Ruta | Qué hace | |---|---|---| | `POST` | `/v2/cobros` | Crea un cobro. Responde `201` con el identificador y el estado `pe...
+
+2. catalogo-errores.json — TMB-2012  [RRF 0.0163 | Pinecone #2 · BM25 #1]
+   Catálogo de códigos de error de la API de cobros codigo: TMB-2012 http: 504 servicio: payments-worker mensaje: Timeout del adquirente causa: El adquirente no re...
+
+3. catalogo-errores.json — TMB-3002  [RRF 0.0155 | Pinecone #3 · BM25 #6]
+   Catálogo de códigos de error de la API de cobros codigo: TMB-3002 http: 422 servicio: api-cobros mensaje: Reembolso mayor al saldo del cobro causa: La suma de l...
+
+4. catalogo-errores.json — TMB-4090  [RRF 0.0150 | Pinecone #10 · BM25 #4]
+   Catálogo de códigos de error de la API de cobros codigo: TMB-4090 http: 409 servicio: api-cobros mensaje: Cobro en estado incompatible causa: Se intentó cancela...
+
+5. catalogo-errores.json — TMB-2004  [RRF 0.0149 | Pinecone #5 · BM25 #9]
+   Catálogo de códigos de error de la API de cobros codigo: TMB-2004 http: 402 servicio: payments-worker mensaje: Fondos insuficientes causa: La tarjeta no tiene s...
+
+Consulta: ¿Qué pasa con una funcionalidad nueva que queda activada para todos durante meses?
+
+1. politica-despliegues.md — Ventanas de despliegue  [RRF 0.0161 | Pinecone #3 · BM25 #1]
+   ## Ventanas de despliegue Se puede desplegar a producción de lunes a jueves entre las 10:00 y las 17:00, y los viernes entre las 10:00 y las 15:00 (hora de Buen...
+
+2. sla-y-soporte.pdf, página 3 — Exclusiones, mantenimiento y escalamiento  [RRF 0.0154 | Pinecone #2 · BM25 #8]
+   Exclusiones, mantenimiento y escalamiento No cuentan como indisponibilidad: las ventanas de mantenimiento programado, los problemas causados por el comercio o p...
+
+3. observabilidad.md — Guía de observabilidad y alertas  [RRF 0.0154 | Pinecone #8 · BM25 #2]
+   # Guía de observabilidad y alertas Documento interno del equipo de Plataforma de Tambor (empresa ficticia). Describe qué se mide, dónde se mira y qué alertas ex...
+
+4. seguridad-y-accesos.md — Secretos  [RRF 0.0153 | Pinecone #4 · BM25 #7]
+   ## Secretos Los secretos (contraseñas de bases de datos, claves de adquirentes, tokens de terceros) se guardan en AWS Secrets Manager y se inyectan en los pods ...
+
+5. observabilidad.md — Métricas, logs y trazas  [RRF 0.0153 | Pinecone #7 · BM25 #4]
+   ## Métricas, logs y trazas Las métricas se guardan en Prometheus con una resolución de 15 segundos durante 15 días. Después se agregan a resolución de 5 minutos...
+
+Consulta: ¿Cuánto tiempo tengo para reclamar?
+Filtro: {'$and': [{'audiencia': {'$eq': 'comercios'}}, {'actualizado': {'$gte': 20260701}}]}
+
+1. sla-y-soporte.pdf, página 1 — SLA y soporte para comercios  [RRF 0.0161 | Pinecone #3 · BM25 #1]
+   SLA y soporte para comercios Planes de soporte Acuerdo de nivel de servicio (SLA) y soporte para comercios. Tambor es una empresa ficticia creada para este proy...
+
+2. sla-y-soporte.pdf, página 3 — Exclusiones, mantenimiento y escalamiento  [RRF 0.0082 | Pinecone #1 · BM25 #-]
+   Exclusiones, mantenimiento y escalamiento No cuentan como indisponibilidad: las ventanas de mantenimiento programado, los problemas causados por el comercio o p...
+
+3. catalogo-errores.json — TMB-2012  [RRF 0.0081 | Pinecone #2 · BM25 #-]
+   Catálogo de códigos de error de la API de cobros codigo: TMB-2012 http: 504 servicio: payments-worker mensaje: Timeout del adquirente causa: El adquirente no re...
+
+4. api-cobros.md — Referencia de la API de cobros  [RRF 0.0081 | Pinecone #- · BM25 #2]
+   # Referencia de la API de cobros Documento para los comercios que integran con Tambor (empresa ficticia). Describe cómo autenticarse, los endpoints principales,...
+
+5. sla-y-soporte.pdf, página 2 — Compromiso de disponibilidad y créditos  [RRF 0.0078 | Pinecone #4 · BM25 #-]
+   Compromiso de disponibilidad y créditos Tambor se compromete a una disponibilidad mensual de la API de cobros del 99,95 %. La disponibilidad se calcula como el ...

@@ -1,0 +1,4 @@
+INFO    | rag.embeddings | modelo de embeddings jinaai/jina-embeddings-v2-base-es cargado en 2.2 s
+INFO    | rag_pinecone.infra | infra: índice 'tambor-docs' listo (dimensión 768, métrica cosine, host tambor-docs-otkbxf9.svc.aped-4627-b74a.pinecone.io)
+
+Índice 'tambor-docs' ya existía y es compatible: serverless en aws/us-east-1, dimensión 768, métrica cosine.

@@ -19,3 +19,11 @@ fastembed>=0.8.0
 # Desarrollo (para correr los tests, no hacen falta para usar el cliente)
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
+
+# Pre-entrega 4: RAG escalable en Pinecone
+pinecone>=7.3.0,<8
+langchain-pinecone>=0.2.13
+langchain-community>=0.4.2
+langchain-classic>=1.0.8
+rank-bm25>=0.2.2
+pypdf>=6.0.0

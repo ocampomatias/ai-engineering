@@ -1,0 +1,118 @@
+{
+  "titulo": "Catálogo de códigos de error de la API de cobros",
+  "descripcion": "Códigos que devuelve la API de cobros de Tambor (empresa ficticia) en el campo `error.codigo`. Cada entrada dice qué significa, la causa más común y qué tiene que hacer el comercio.",
+  "errores": [
+    {
+      "codigo": "TMB-1001",
+      "http": 400,
+      "servicio": "api-cobros",
+      "mensaje": "Monto inválido",
+      "causa": "El monto no es un entero positivo en centavos, o supera el máximo de 50.000.000 de centavos por cobro.",
+      "accion": "Enviar el monto en centavos como número entero. Para montos mayores al máximo, dividir la operación o pedir una excepción a Atención a Comercios."
+    },
+    {
+      "codigo": "TMB-1002",
+      "http": 400,
+      "servicio": "api-cobros",
+      "mensaje": "Moneda no soportada",
+      "causa": "El campo `moneda` no es ARS, USD ni BRL, las únicas monedas habilitadas.",
+      "accion": "Usar uno de los códigos ISO 4217 habilitados."
+    },
+    {
+      "codigo": "TMB-1003",
+      "http": 401,
+      "servicio": "api-cobros",
+      "mensaje": "Clave de API inválida para este entorno",
+      "causa": "Se usó una clave `tk_live_` contra el sandbox o una clave `tk_test_` contra producción, o la clave fue revocada.",
+      "accion": "Verificar que la clave corresponda al entorno. Si fue revocada, crear una nueva desde el panel."
+    },
+    {
+      "codigo": "TMB-1009",
+      "http": 409,
+      "servicio": "api-cobros",
+      "mensaje": "Conflicto de idempotencia",
+      "causa": "Se reusó una `Idempotency-Key` con un cuerpo distinto al del pedido original dentro de las 24 horas.",
+      "accion": "Generar una clave de idempotencia nueva por cada operación distinta. Reusar la misma clave solo para reintentar exactamente el mismo pedido."
+    },
+    {
+      "codigo": "TMB-1429",
+      "http": 429,
+      "servicio": "api-cobros",
+      "mensaje": "Límite de requests superado",
+      "causa": "El comercio superó los 300 requests por minuto, o los 60 por minuto del endpoint de listado.",
+      "accion": "Esperar los segundos que indica el header `Retry-After` antes de reintentar, y reintentar con espera exponencial."
+    },
+    {
+      "codigo": "TMB-2001",
+      "http": 402,
+      "servicio": "payments-worker",
+      "mensaje": "Tarjeta rechazada por el emisor",
+      "causa": "El banco emisor rechazó la autorización sin dar un motivo específico.",
+      "accion": "Pedirle al comprador que use otro medio de pago o que se comunique con su banco. No reintentar la misma tarjeta más de una vez."
+    },
+    {
+      "codigo": "TMB-2004",
+      "http": 402,
+      "servicio": "payments-worker",
+      "mensaje": "Fondos insuficientes",
+      "causa": "La tarjeta no tiene saldo o límite disponible para el monto.",
+      "accion": "Informar al comprador. El cobro queda rechazado y no se reintenta automáticamente."
+    },
+    {
+      "codigo": "TMB-2012",
+      "http": 504,
+      "servicio": "payments-worker",
+      "mensaje": "Timeout del adquirente",
+      "causa": "El adquirente no respondió la autorización en 25 segundos. El estado real del cobro es incierto hasta la conciliación.",
+      "accion": "No crear un cobro nuevo: consultar el estado con GET /v2/cobros/{id}. Tambor resuelve el estado final como máximo en 2 horas."
+    },
+    {
+      "codigo": "TMB-2031",
+      "http": 422,
+      "servicio": "payments-worker",
+      "mensaje": "Autenticación 3-D Secure fallida",
+      "causa": "El comprador no completó el desafío de 3-D Secure o lo completó mal.",
+      "accion": "Ofrecer reintentar el pago. Después de 3 intentos fallidos la tarjeta se bloquea 24 horas para ese comercio."
+    },
+    {
+      "codigo": "TMB-3001",
+      "http": 422,
+      "servicio": "api-cobros",
+      "mensaje": "Reembolso fuera de plazo",
+      "causa": "Pasaron más de 180 días desde que se aprobó el cobro.",
+      "accion": "Hacer la devolución por fuera de la plataforma, por ejemplo con una transferencia."
+    },
+    {
+      "codigo": "TMB-3002",
+      "http": 422,
+      "servicio": "api-cobros",
+      "mensaje": "Reembolso mayor al saldo del cobro",
+      "causa": "La suma de los reembolsos superaría el monto original, o ya se hicieron 10 reembolsos parciales.",
+      "accion": "Consultar el saldo reembolsable del cobro con GET /v2/cobros/{id} antes de pedir el reembolso."
+    },
+    {
+      "codigo": "TMB-4090",
+      "http": 409,
+      "servicio": "api-cobros",
+      "mensaje": "Cobro en estado incompatible",
+      "causa": "Se intentó cancelar un cobro que ya no está pendiente, o reembolsar uno que no está aprobado.",
+      "accion": "Consultar el estado actual del cobro antes de la operación."
+    },
+    {
+      "codigo": "TMB-5030",
+      "http": 503,
+      "servicio": "api-cobros",
+      "mensaje": "Servicio temporalmente no disponible",
+      "causa": "La cola de pagos llegó a su límite de 50.000 mensajes y la API dejó de aceptar cobros nuevos para proteger la base de datos.",
+      "accion": "Reintentar con espera exponencial usando la misma Idempotency-Key. Consultar la página de estado de Tambor."
+    },
+    {
+      "codigo": "TMB-5100",
+      "http": 500,
+      "servicio": "notificador",
+      "mensaje": "Webhook no entregado",
+      "causa": "El servidor del comercio no respondió 2xx en 10 segundos durante las 24 horas de reintentos.",
+      "accion": "Revisar la URL de webhook configurada y reenviar los eventos pendientes desde el panel, sección Desarrolladores."
+    }
+  ]
+}

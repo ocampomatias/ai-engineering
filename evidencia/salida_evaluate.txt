@@ -1,0 +1,34 @@
+
+Evaluación sobre 14 preguntas (6 léxicas, 8 semánticas), k=5
+Índice 'tambor-docs', namespace 'plataforma', 38 fragmentos. Pesos RRF vectorial/BM25: [0.5, 0.5], c=60.
+
+Modo        Recall@k    Prec@k      F1     MRR    Frag@k  ms/consulta
+---------------------------------------------------------------------
+hibrido      100.0 %    47.1 %   0.641   0.845    92.9 %        336 ms
+vectorial    100.0 %    51.4 %   0.679   0.845   100.0 %        249 ms
+bm25          92.9 %    40.0 %   0.559   0.839    85.7 %          1 ms
+
+Precision@5 máxima posible con este corpus: 71.4 % (hay documentos con menos de 5 fragmentos).
+
+Por tipo de pregunta (Recall@k / MRR / acierto de fragmento):
+  lexica    hibrido 100.0 % / 0.92 / 100.0 % | vectorial 100.0 % / 0.83 / 100.0 % | bm25 100.0 % / 1.00 / 100.0 %
+  semantica hibrido 100.0 % / 0.79 / 87.5 % | vectorial 100.0 % / 0.85 / 100.0 % | bm25 87.5 % / 0.72 / 75.0 %
+
+Pregunta                            hibrido        vectorial             bm25
+error-idempotencia            #1 P=1.0 frag    #1 P=1.0 frag    #1 P=0.8 frag
+error-timeout-adquirente      #2 P=0.8 frag    #2 P=0.8 frag    #1 P=0.6 frag
+alerta-pgbouncer              #1 P=0.4 frag    #2 P=0.4 frag    #1 P=0.4 frag
+header-firma                  #1 P=0.6 frag    #1 P=0.6 frag    #1 P=0.6 frag
+comando-rollback              #1 P=0.4 frag    #1 P=0.4 frag    #1 P=0.2 frag
+cola-dlq                      #1 P=0.6 frag    #1 P=0.4 frag    #1 P=0.4 frag
+credito-caida-larga           #2 P=0.4 frag    #3 P=0.4 frag    #1 P=0.4 frag
+acceso-temporal               #1 P=0.4 frag    #1 P=0.6 frag    #1 P=0.4 frag
+cobro-doble                   #1 P=0.4 frag    #1 P=0.4 frag    #2 P=0.2 frag
+quien-decide                  #1 P=0.6 frag    #1 P=0.6 frag    #1 P=0.6 frag
+retencion-registros           #2 P=0.2 frag    #1 P=0.2 frag    #4 P=0.4 frag
+rotacion-guardia              #3 P=0.2 frag    #2 P=0.4 frag    -- P=0.0     
+flag-viejo                    #1 P=0.2         #1 P=0.4 frag    #1 P=0.2     
+plan-barato                   #1 P=0.4 frag    #1 P=0.6 frag    #1 P=0.4 frag
+#n: posición del primer fragmento del documento esperado. frag: trajo el fragmento exacto.
+
+Resultados guardados en evidencia\evaluacion_pinecone.json
