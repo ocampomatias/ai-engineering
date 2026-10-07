@@ -1,0 +1,49 @@
+$ python chat_agente.py --thread persistencia "¿Qué cobros rechazados tuvo el Café del Puerto?"
+INFO    | agente.grafo | [persistencia] usuario: ¿Qué cobros rechazados tuvo el Café del Puerto?
+INFO    | agente.grafo | [persistencia] razona: Necesito buscar primero el ID del Café del Puerto para consultar sus cobros.
+INFO    | agente.grafo | [persistencia] llama a buscar_comercio({'nombre': 'Café del Puerto'})
+INFO    | agente.grafo | [persistencia] resultado de buscar_comercio -> {"comercios": [{"id": 103, "nombre": "Café del Puerto", "plan": "Empresa", "alta": "2023-08-02", "estado": "activo"}]}
+INFO    | agente.grafo | [persistencia] razona: Perfecto, ahora traigo sus cobros rechazados.
+INFO    | agente.grafo | [persistencia] llama a listar_cobros({'comercio_id': 103, 'estado': 'rechazado'})
+INFO    | agente.grafo | [persistencia] resultado de listar_cobros -> {"comercio": "Café del Puerto", "filtro_estado": "rechazado", "cobros": [{"id": "cob_7F3N4", "fecha": "2026-10-06T20:51:40", "monto": "6.400,00 ARS", "estado": "rechazado", "codigo_error": "TMB-1009"}]}
+INFO    | agente.grafo | [persistencia] responde: El Café del Puerto (ID 103) tuvo **1 cobro rechazado**: | ID | Fecha | Monto | Error | |---|---|---|---| | cob_7F3N4 | 6 oct 2026 | 6.400,00 ARS | TMB-1009 | ¿Necesitás saber qué significa el error TMB-1009 o los detalles completos del cobro?
+INFO    | agente.grafo | [persistencia] turno resuelto en 4.9 s: 2 llamada(s) a herramientas, 6892 tokens de entrada / 286 de salida, 6 mensajes en memoria
+
+El Café del Puerto (ID 103) tuvo **1 cobro rechazado**:
+
+| ID | Fecha | Monto | Error |
+|---|---|---|---|
+| cob_7F3N4 | 6 oct 2026 | 6.400,00 ARS | TMB-1009 |
+
+¿Necesitás saber qué significa el error TMB-1009 o los detalles completos del cobro?
+
+# --- proceso nuevo, mismo thread_id ---
+$ python chat_agente.py --thread persistencia "¿Qué tiene que hacer el comercio con ese error?"
+INFO    | agente.grafo | [persistencia] usuario: ¿Qué tiene que hacer el comercio con ese error?
+INFO    | agente.grafo | [persistencia] razona: Voy a buscar la documentación sobre ese error.
+INFO    | agente.grafo | [persistencia] llama a buscar_documentacion({'consulta': 'TMB-1009'})
+INFO    | agente.grafo | [persistencia] resultado de buscar_documentacion -> {"fragmentos": [{"fuente": "catalogo-errores.json", "seccion": "TMB-1009", "pagina": null, "texto": "Catálogo de códigos de error de la API de cobros codigo: TMB-1009 http: 409 servicio: api-cobros mensaje: Conflicto de idempotencia causa: Se reusó una `Idempotency-Key` con un cuerpo distinto al del
+INFO    | agente.grafo | [persistencia] responde: El error **TMB-1009** indica un **conflicto de idempotencia**. **Qué pasó:** El Café del Puerto reutilizó una `Idempotency-Key` (clave de idempotencia) con un cuerpo de pedido distinto al original, dentro de las 24 horas. **Qué tiene que hacer:** - Generar una **clave de idempotencia nueva** para cada operación distinta - Solo reusar la misma clave si quiere **reintentar exactamente el mismo pedido** (sin cambios en el monto, concepto u otros datos) Básicamente, no puede cambiar los datos de un cobro manteniendo la misma clave de idempotencia. Tiene que crear una nueva operación con una clave nueva.
+INFO    | agente.grafo | [persistencia] turno resuelto en 13.0 s: 1 llamada(s) a herramientas, 5731 tokens de entrada / 273 de salida, 10 mensajes en memoria
+
+El error **TMB-1009** indica un **conflicto de idempotencia**. 
+
+**Qué pasó:** El Café del Puerto reutilizó una `Idempotency-Key` (clave de idempotencia) con un cuerpo de pedido distinto al original, dentro de las 24 horas.
+
+**Qué tiene que hacer:**
+- Generar una **clave de idempotencia nueva** para cada operación distinta
+- Solo reusar la misma clave si quiere **reintentar exactamente el mismo pedido** (sin cambios en el monto, concepto u otros datos)
+
+Básicamente, no puede cambiar los datos de un cobro manteniendo la misma clave de idempotencia. Tiene que crear una nueva operación con una clave nueva.
+
+$ python chat_agente.py --thread persistencia --historial
+ human: ¿Qué cobros rechazados tuvo el Café del Puerto?
+    ai: Necesito buscar primero el ID del Café del Puerto para consultar sus cobros. -> ['buscar_comercio']
+  tool: {"comercios": [{"id": 103, "nombre": "Café del Puerto", "plan": "Empresa", "alta": "2023-08-02", "estado": "activo"}]}
+    ai: Perfecto, ahora traigo sus cobros rechazados. -> ['listar_cobros']
+  tool: {"comercio": "Café del Puerto", "filtro_estado": "rechazado", "cobros": [{"id": "cob_7F3N4", "fecha": "2026-10-06T20:51:40", "monto": "6.400,00 ARS", "estado": "rechazado", "codigo_error": "TMB-1009"}
+    ai: El Café del Puerto (ID 103) tuvo **1 cobro rechazado**: | ID | Fecha | Monto | Error | |---|---|---|---| | cob_7F3N4 | 6 oct 2026 | 6.400,00 ARS | TMB-1009 | ¿Necesitás saber qué significa el error TM
+ human: ¿Qué tiene que hacer el comercio con ese error?
+    ai: Voy a buscar la documentación sobre ese error. -> ['buscar_documentacion']
+  tool: {"fragmentos": [{"fuente": "catalogo-errores.json", "seccion": "TMB-1009", "pagina": null, "texto": "Catálogo de códigos de error de la API de cobros codigo: TMB-1009 http: 409 servicio: api-cobros me
+    ai: El error **TMB-1009** indica un **conflicto de idempotencia**. **Qué pasó:** El Café del Puerto reutilizó una `Idempotency-Key` (clave de idempotencia) con un cuerpo de pedido distinto al original, de

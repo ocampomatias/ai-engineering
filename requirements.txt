@@ -27,3 +27,8 @@ langchain-community>=0.4.2
 langchain-classic>=1.0.8
 rank-bm25>=0.2.2
 pypdf>=6.0.0
+
+# Pre-entrega 5: agente ReAct con LangGraph
+langgraph>=1.2.14
+langgraph-checkpoint-sqlite>=3.1.1
+aiosqlite>=0.22.1

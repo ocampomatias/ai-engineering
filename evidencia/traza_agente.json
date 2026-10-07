@@ -1,0 +1,398 @@
+[
+  {
+    "thread_id": "caso-ferreteria",
+    "pregunta": "¿Por qué falló el último cobro de Ferretería López y qué tiene que hacer el comercio?",
+    "respuesta": "**Resumen:**\n\nEl último cobro rechazado de Ferretería López es el **cob_7F3K2** del 6 de octubre de 2026 por $45.990,00 ARS.\n\n**Razón de la falla:** Código de error **TMB-2031** - Autenticación 3-D Secure fallida. El comprador no completó correctamente el desafío de seguridad 3-D Secure.\n\n**Qué tiene que hacer el comercio:**\n1. Ofrecer al comprador reintentar el pago\n2. ⚠️ Importante: Si hay 3 intentos fallidos consecutivos, la tarjeta se bloqueará por 24 horas para ese comercio",
+    "pasos": [
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Voy a buscar a Ferretería López para obtener su ID y luego revisar sus cobros.",
+        "error": false,
+        "ms": 1699.1565999924205
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_comercio",
+        "argumentos": {
+          "nombre": "Ferretería López"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1699.1565999924205
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_comercio",
+        "argumentos": null,
+        "contenido": "{\"comercios\": [{\"id\": 102, \"nombre\": \"Ferretería López\", \"plan\": \"Básico\", \"alta\": \"2025-01-20\", \"estado\": \"activo\"}]}",
+        "error": false,
+        "ms": 2.2282999707385898
+      },
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Perfecto. Ahora traigo el último cobro rechazado:",
+        "error": false,
+        "ms": 1502.9682000167668
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "listar_cobros",
+        "argumentos": {
+          "comercio_id": 102,
+          "estado": "rechazado",
+          "limite": 1
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1502.9682000167668
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "listar_cobros",
+        "argumentos": null,
+        "contenido": "{\"comercio\": \"Ferretería López\", \"filtro_estado\": \"rechazado\", \"cobros\": [{\"id\": \"cob_7F3K2\", \"fecha\": \"2026-10-06T19:42:10\", \"monto\": \"45.990,00 ARS\", \"estado\": \"rechazado\", \"codigo_error\": \"TMB-2031\"}]}",
+        "error": false,
+        "ms": 2.1954000112600625
+      },
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Ahora busco qué significa el código de error TMB-2031:",
+        "error": false,
+        "ms": 1178.1781999743544
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_documentacion",
+        "argumentos": {
+          "consulta": "TMB-2031"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1178.1781999743544
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_documentacion",
+        "argumentos": null,
+        "contenido": "{\"fragmentos\": [{\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-2031\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-2031 http: 422 servicio: payments-worker mensaje: Autenticación 3-D Secure fallida causa: El comprador no completó el desafío de 3-D Secure o lo completó mal. accion: Ofrecer reintentar el pago. Después de 3 intentos fallidos la tarjeta se bloquea 24 horas para ese comercio.\"}, {\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-5100\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-5100 http: 500 servicio: notificador mensaje: Webhook no entregado causa: El servidor del comercio no respondió 2xx en 10 segundos durante las 24 horas de reintentos. accion: Revisar la URL de webhook configurada y reenviar los eventos pendientes desde el panel, sección Desarrolladores.\"}, {\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-1009\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-1009 http: 409 servicio: api-cobros mensaje: Conflicto de idempotencia causa: Se reusó una `Idempotency-Key` con un cuerpo distinto al del pedido original dentro de las 24 horas. accion: Generar una clave de idempotencia nueva por cada operación distinta. Reusar la misma clave solo para reintentar exactamente el mismo pedido.\"}]}",
+        "error": false,
+        "ms": 6540.948000038043
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "**Resumen:**\n\nEl último cobro rechazado de Ferretería López es el **cob_7F3K2** del 6 de octubre de 2026 por $45.990,00 ARS.\n\n**Razón de la falla:** Código de error **TMB-2031** - Autenticación 3-D Secure fallida. El comprador no completó correctamente el desafío de seguridad 3-D Secure.\n\n**Qué tiene que hacer el comercio:**\n1. Ofrecer al comprador reintentar el pago\n2. ⚠️ Importante: Si hay 3 intentos fallidos consecutivos, la tarjeta se bloqueará por 24 horas para ese comercio",
+        "error": false,
+        "ms": 2526.9028999609873
+      }
+    ],
+    "llamadas_herramientas": 3,
+    "mensajes_en_memoria": 8,
+    "tokens_entrada": 10012,
+    "tokens_salida": 461,
+    "duracion_ms": 13454.939699964598,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-ferreteria",
+    "pregunta": "¿Y el cobro anterior a ese? ¿También tuvo problemas?",
+    "respuesta": "**Sí, el cobro anterior también tiene problemas:**\n\nEl cobro **cob_7F1A9** del 5 de octubre ($12.500,00 ARS) está **en_revision** con código **TMB-2012** - Timeout del adquirente.\n\n**Qué significa:**\nEl banco/adquirente no respondió en tiempo. El estado real del cobro es incierto hasta que se resuelva.\n\n**Qué tiene que hacer el comercio:**\n- **No crear un cobro nuevo** \n- Consultarlo con el ID del cobro (cob_7F1A9)\n- Tambor resuelve el estado final como máximo en 2 horas",
+    "pasos": [
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Voy a traer los últimos cobros para ver el anterior al rechazado:",
+        "error": false,
+        "ms": 1497.1456000348553
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "listar_cobros",
+        "argumentos": {
+          "comercio_id": 102,
+          "limite": 5
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1497.1456000348553
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "listar_cobros",
+        "argumentos": null,
+        "contenido": "{\"comercio\": \"Ferretería López\", \"filtro_estado\": null, \"cobros\": [{\"id\": \"cob_7F3K2\", \"fecha\": \"2026-10-06T19:42:10\", \"monto\": \"45.990,00 ARS\", \"estado\": \"rechazado\", \"codigo_error\": \"TMB-2031\"}, {\"id\": \"cob_7F1A9\", \"fecha\": \"2026-10-05T21:03:55\", \"monto\": \"12.500,00 ARS\", \"estado\": \"en_revision\", \"codigo_error\": \"TMB-2012\"}, {\"id\": \"cob_7E8Q4\", \"fecha\": \"2026-10-04T11:15:02\", \"monto\": \"8.700,00 ARS\", \"estado\": \"aprobado\", \"codigo_error\": null}, {\"id\": \"cob_7E2M7\", \"fecha\": \"2026-10-02T16:48:31\", \"monto\": \"23.100,00 ARS\", \"estado\": \"aprobado\", \"codigo_error\": null}, {\"id\": \"cob_7D9X1\", \"fecha\": \"2026-09-29T10:05:44\", \"monto\": \"159.000,00 ARS\", \"estado\": \"reembolsado\", \"codigo_error\": null}]}",
+        "error": false,
+        "ms": 2.731100015807897
+      },
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "El cobro anterior (**cob_7F1A9** del 5 de octubre, $12.500,00 ARS) sí tiene problemas: está **en_revision** con el código de error **TMB-2012**.\n\nBusco qué significa ese error:",
+        "error": false,
+        "ms": 1830.012299993541
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_documentacion",
+        "argumentos": {
+          "consulta": "TMB-2012"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1830.012299993541
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_documentacion",
+        "argumentos": null,
+        "contenido": "{\"fragmentos\": [{\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-2012\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-2012 http: 504 servicio: payments-worker mensaje: Timeout del adquirente causa: El adquirente no respondió la autorización en 25 segundos. El estado real del cobro es incierto hasta la conciliación. accion: No crear un cobro nuevo: consultar el estado con GET /v2/cobros/{id}. Tambor resuelve el estado final como máximo en 2 horas.\"}, {\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-5100\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-5100 http: 500 servicio: notificador mensaje: Webhook no entregado causa: El servidor del comercio no respondió 2xx en 10 segundos durante las 24 horas de reintentos. accion: Revisar la URL de webhook configurada y reenviar los eventos pendientes desde el panel, sección Desarrolladores.\"}, {\"fuente\": \"catalogo-errores.json\", \"seccion\": \"TMB-2004\", \"pagina\": null, \"texto\": \"Catálogo de códigos de error de la API de cobros codigo: TMB-2004 http: 402 servicio: payments-worker mensaje: Fondos insuficientes causa: La tarjeta no tiene saldo o límite disponible para el monto. accion: Informar al comprador. El cobro queda rechazado y no se reintenta automáticamente.\"}]}",
+        "error": false,
+        "ms": 231.59069998655468
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "**Sí, el cobro anterior también tiene problemas:**\n\nEl cobro **cob_7F1A9** del 5 de octubre ($12.500,00 ARS) está **en_revision** con código **TMB-2012** - Timeout del adquirente.\n\n**Qué significa:**\nEl banco/adquirente no respondió en tiempo. El estado real del cobro es incierto hasta que se resuelva.\n\n**Qué tiene que hacer el comercio:**\n- **No crear un cobro nuevo** \n- Consultarlo con el ID del cobro (cob_7F1A9)\n- Tambor resuelve el estado final como máximo en 2 horas",
+        "error": false,
+        "ms": 2321.8495000037365
+      }
+    ],
+    "llamadas_herramientas": 2,
+    "mensajes_en_memoria": 14,
+    "tokens_entrada": 11244,
+    "tokens_salida": 396,
+    "duracion_ms": 5885.336600011215,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-lopez",
+    "pregunta": "Mostrame los cobros rechazados de López.",
+    "respuesta": "Encontré 2 comercios con ese nombre:\n\n1. **Ferretería López** (ID 102) - Plan Básico\n2. **Farmacia López Hermanos** (ID 104) - Plan Pro\n\n¿Cuál de los dos querés ver?",
+    "pasos": [
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Voy a buscar el comercio \"López\" primero para obtener su ID.",
+        "error": false,
+        "ms": 1259.0981000103056
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_comercio",
+        "argumentos": {
+          "nombre": "López"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1259.0981000103056
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_comercio",
+        "argumentos": null,
+        "contenido": "{\"comercios\": [{\"id\": 102, \"nombre\": \"Ferretería López\", \"plan\": \"Básico\", \"alta\": \"2025-01-20\", \"estado\": \"activo\"}, {\"id\": 104, \"nombre\": \"Farmacia López Hermanos\", \"plan\": \"Pro\", \"alta\": \"2025-06-14\", \"estado\": \"activo\"}], \"aviso\": \"Hay 2 comercios que coinciden. Si el usuario no dijo cuál, preguntale antes de consultar sus cobros.\"}",
+        "error": false,
+        "ms": 3.068600024562329
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Encontré 2 comercios con ese nombre:\n\n1. **Ferretería López** (ID 102) - Plan Básico\n2. **Farmacia López Hermanos** (ID 104) - Plan Pro\n\n¿Cuál de los dos querés ver?",
+        "error": false,
+        "ms": 1284.24399998039
+      }
+    ],
+    "llamadas_herramientas": 1,
+    "mensajes_en_memoria": 4,
+    "tokens_entrada": 4481,
+    "tokens_salida": 144,
+    "duracion_ms": 2547.874900046736,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-lopez",
+    "pregunta": "El de la farmacia.",
+    "respuesta": "Farmacia López Hermanos tiene 1 cobro rechazado:\n\n| ID | Fecha | Monto | Estado | Error |\n|---|---|---|---|---|\n| cob_7E7W2 | 3 oct 2026, 17:44 | $9.900,00 ARS | Rechazado | TMB-2001 |\n\n¿Querés que te explique qué significa el error TMB-2001 o ves el detalle del cobro?",
+    "pasos": [
+      {
+        "tipo": "llamada",
+        "herramienta": "listar_cobros",
+        "argumentos": {
+          "comercio_id": 104,
+          "estado": "rechazado"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1150.689899979625
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "listar_cobros",
+        "argumentos": null,
+        "contenido": "{\"comercio\": \"Farmacia López Hermanos\", \"filtro_estado\": \"rechazado\", \"cobros\": [{\"id\": \"cob_7E7W2\", \"fecha\": \"2026-10-03T17:44:09\", \"monto\": \"9.900,00 ARS\", \"estado\": \"rechazado\", \"codigo_error\": \"TMB-2001\"}]}",
+        "error": false,
+        "ms": 2.1650000126101077
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Farmacia López Hermanos tiene 1 cobro rechazado:\n\n| ID | Fecha | Monto | Estado | Error |\n|---|---|---|---|---|\n| cob_7E7W2 | 3 oct 2026, 17:44 | $9.900,00 ARS | Rechazado | TMB-2001 |\n\n¿Querés que te explique qué significa el error TMB-2001 o ves el detalle del cobro?",
+        "error": false,
+        "ms": 1692.2804999630898
+      }
+    ],
+    "llamadas_herramientas": 1,
+    "mensajes_en_memoria": 8,
+    "tokens_entrada": 5034,
+    "tokens_salida": 199,
+    "duracion_ms": 2846.9546999549493,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-nombre-mal-escrito",
+    "pregunta": "¿Cuál fue el último cobro de la Libreria Andinna y en qué estado quedó?",
+    "respuesta": "¿Quisiste decir **Librería Andina**? Es lo más parecido que encontré. Confirmá y busco el último cobro.",
+    "pasos": [
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Primero necesito buscar el ID de la Librería Andinna.",
+        "error": false,
+        "ms": 1309.9838000489399
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_comercio",
+        "argumentos": {
+          "nombre": "Libreria Andinna"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1309.9838000489399
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_comercio",
+        "argumentos": null,
+        "contenido": "No hay ningún comercio cuyo nombre contenga 'Libreria Andinna'. Nombres parecidos: ['Librería Andina']. Probá con otra parte del nombre o pedile al usuario que lo confirme.",
+        "error": true,
+        "ms": 4.236999957356602
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "¿Quisiste decir **Librería Andina**? Es lo más parecido que encontré. Confirmá y busco el último cobro.",
+        "error": false,
+        "ms": 1218.4657999896444
+      }
+    ],
+    "llamadas_herramientas": 1,
+    "mensajes_en_memoria": 4,
+    "tokens_entrada": 4447,
+    "tokens_salida": 120,
+    "duracion_ms": 2535.1325000519864,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-nombre-mal-escrito",
+    "pregunta": "Sí, esa.",
+    "respuesta": "El último cobro de Librería Andina fue:\n\n- **ID**: cob_7F2B6\n- **Fecha**: 6 de octubre de 2026 a las 13:20\n- **Monto**: $32.000,00 ARS\n- **Estado**: **Aprobado** ✓",
+    "pasos": [
+      {
+        "tipo": "llamada",
+        "herramienta": "buscar_comercio",
+        "argumentos": {
+          "nombre": "Librería Andina"
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1090.79919999931
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "buscar_comercio",
+        "argumentos": null,
+        "contenido": "{\"comercios\": [{\"id\": 101, \"nombre\": \"Librería Andina\", \"plan\": \"Pro\", \"alta\": \"2024-03-11\", \"estado\": \"activo\"}]}",
+        "error": false,
+        "ms": 2.1391999907791615
+      },
+      {
+        "tipo": "razonamiento",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Ahora traigo el último cobro:",
+        "error": false,
+        "ms": 1258.4782000049017
+      },
+      {
+        "tipo": "llamada",
+        "herramienta": "listar_cobros",
+        "argumentos": {
+          "comercio_id": 101,
+          "limite": 1
+        },
+        "contenido": "",
+        "error": false,
+        "ms": 1258.4782000049017
+      },
+      {
+        "tipo": "resultado",
+        "herramienta": "listar_cobros",
+        "argumentos": null,
+        "contenido": "{\"comercio\": \"Librería Andina\", \"filtro_estado\": null, \"cobros\": [{\"id\": \"cob_7F2B6\", \"fecha\": \"2026-10-06T13:20:00\", \"monto\": \"32.000,00 ARS\", \"estado\": \"aprobado\", \"codigo_error\": null}]}",
+        "error": false,
+        "ms": 2.6339999749325216
+      },
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "El último cobro de Librería Andina fue:\n\n- **ID**: cob_7F2B6\n- **Fecha**: 6 de octubre de 2026 a las 13:20\n- **Monto**: $32.000,00 ARS\n- **Estado**: **Aprobado** ✓",
+        "error": false,
+        "ms": 1409.0525999781676
+      }
+    ],
+    "llamadas_herramientas": 2,
+    "mensajes_en_memoria": 10,
+    "tokens_entrada": 7473,
+    "tokens_salida": 228,
+    "duracion_ms": 3765.958399977535,
+    "cortado_por_limite": false
+  },
+  {
+    "thread_id": "caso-sin-herramientas",
+    "pregunta": "Hola, ¿qué tipo de consultas puedo hacerte?",
+    "respuesta": "Hola 👋 Soy el asistente de soporte técnico de Tambor. Puedo ayudarte con:\n\n**Sobre cobros:**\n- Buscar información de un comercio por nombre\n- Listar los cobros de un comercio (últimos, rechazados, aprobados, etc.)\n- Consultar el detalle de un cobro específico (estado, medio de pago, intentos)\n- Explicar códigos de error (TMB-XXXX)\n\n**Sobre procedimientos y políticas:**\n- Responder preguntas sobre reglas internas, SLA, soporte\n- Consultar la documentación de la API de cobros\n- Buscar procedimientos específicos (créditos, despliegues, incidentes, etc.)\n\n**Ejemplos de lo que puedo hacer:**\n- \"¿Cuál fue el último cobro de XYZ Comercio?\"\n- \"¿Por qué se rechazó el cobro cob_ABC123?\"\n- \"¿Qué significa el error TMB-2031?\"\n- \"¿Cuál es el SLA de respuesta?\"\n\n¿Hay algo específico que necesites investigar?",
+    "pasos": [
+      {
+        "tipo": "respuesta",
+        "herramienta": null,
+        "argumentos": null,
+        "contenido": "Hola 👋 Soy el asistente de soporte técnico de Tambor. Puedo ayudarte con:\n\n**Sobre cobros:**\n- Buscar información de un comercio por nombre\n- Listar los cobros de un comercio (últimos, rechazados, aprobados, etc.)\n- Consultar el detalle de un cobro específico (estado, medio de pago, intentos)\n- Explicar códigos de error (TMB-XXXX)\n\n**Sobre procedimientos y políticas:**\n- Responder preguntas sobre reglas internas, SLA, soporte\n- Consultar la documentación de la API de cobros\n- Buscar procedimientos específicos (créditos, despliegues, incidentes, etc.)\n\n**Ejemplos de lo que puedo hacer:**\n- \"¿Cuál fue el último cobro de XYZ Comercio?\"\n- \"¿Por qué se rechazó el cobro cob_ABC123?\"\n- \"¿Qué significa el error TMB-2031?\"\n- \"¿Cuál es el SLA de respuesta?\"\n\n¿Hay algo específico que necesites investigar?",
+        "error": false,
+        "ms": 3325.226599990856
+      }
+    ],
+    "llamadas_herramientas": 0,
+    "mensajes_en_memoria": 2,
+    "tokens_entrada": 2139,
+    "tokens_salida": 291,
+    "duracion_ms": 3327.7262999909,
+    "cortado_por_limite": false
+  }
+]

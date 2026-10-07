@@ -1,0 +1,26 @@
+{
+  "descripcion": "Base de datos simulada de la plataforma de cobros de Tambor (empresa ficticia). Se carga en una base SQLite en memoria al arrancar el agente.",
+  "comercios": [
+    {"id": 101, "nombre": "Librería Andina", "plan": "Pro", "alta": "2024-03-11", "estado": "activo"},
+    {"id": 102, "nombre": "Ferretería López", "plan": "Básico", "alta": "2025-01-20", "estado": "activo"},
+    {"id": 103, "nombre": "Café del Puerto", "plan": "Empresa", "alta": "2023-08-02", "estado": "activo"},
+    {"id": 104, "nombre": "Farmacia López Hermanos", "plan": "Pro", "alta": "2025-06-14", "estado": "activo"},
+    {"id": 105, "nombre": "Vivero Las Lomas", "plan": "Básico", "alta": "2026-02-27", "estado": "suspendido"}
+  ],
+  "cobros": [
+    {"id": "cob_7F3K2", "comercio_id": 102, "fecha": "2026-10-06T19:42:10", "monto_centavos": 4599000, "moneda": "ARS", "estado": "rechazado", "codigo_error": "TMB-2031", "medio": "tarjeta de crédito", "intentos": 3},
+    {"id": "cob_7F1A9", "comercio_id": 102, "fecha": "2026-10-05T21:03:55", "monto_centavos": 1250000, "moneda": "ARS", "estado": "en_revision", "codigo_error": "TMB-2012", "medio": "tarjeta de débito", "intentos": 1},
+    {"id": "cob_7E8Q4", "comercio_id": 102, "fecha": "2026-10-04T11:15:02", "monto_centavos": 870000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "transferencia", "intentos": 1},
+    {"id": "cob_7E2M7", "comercio_id": 102, "fecha": "2026-10-02T16:48:31", "monto_centavos": 2310000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "tarjeta de crédito", "intentos": 1},
+    {"id": "cob_7D9X1", "comercio_id": 102, "fecha": "2026-09-29T10:05:44", "monto_centavos": 15900000, "moneda": "ARS", "estado": "reembolsado", "codigo_error": null, "medio": "tarjeta de crédito", "intentos": 1},
+    {"id": "cob_7F2B6", "comercio_id": 101, "fecha": "2026-10-06T13:20:00", "monto_centavos": 3200000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "tarjeta de débito", "intentos": 1},
+    {"id": "cob_7F0C3", "comercio_id": 101, "fecha": "2026-10-05T09:12:47", "monto_centavos": 5600, "moneda": "USD", "estado": "rechazado", "codigo_error": "TMB-2004", "medio": "tarjeta de crédito", "intentos": 1},
+    {"id": "cob_7E5R8", "comercio_id": 101, "fecha": "2026-10-03T18:30:19", "monto_centavos": 1875000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "transferencia", "intentos": 1},
+    {"id": "cob_7F3P0", "comercio_id": 103, "fecha": "2026-10-06T20:55:03", "monto_centavos": 640000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "tarjeta de débito", "intentos": 1},
+    {"id": "cob_7F3N4", "comercio_id": 103, "fecha": "2026-10-06T20:51:40", "monto_centavos": 640000, "moneda": "ARS", "estado": "rechazado", "codigo_error": "TMB-1009", "medio": "tarjeta de débito", "intentos": 1},
+    {"id": "cob_7E9T5", "comercio_id": 103, "fecha": "2026-10-04T08:41:22", "monto_centavos": 1120000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "tarjeta de crédito", "intentos": 1},
+    {"id": "cob_7F2H1", "comercio_id": 104, "fecha": "2026-10-06T10:02:58", "monto_centavos": 2899000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "tarjeta de crédito", "intentos": 1},
+    {"id": "cob_7E7W2", "comercio_id": 104, "fecha": "2026-10-03T17:44:09", "monto_centavos": 990000, "moneda": "ARS", "estado": "rechazado", "codigo_error": "TMB-2001", "medio": "tarjeta de crédito", "intentos": 2},
+    {"id": "cob_7C4L9", "comercio_id": 105, "fecha": "2026-08-30T12:00:00", "monto_centavos": 450000, "moneda": "ARS", "estado": "aprobado", "codigo_error": null, "medio": "transferencia", "intentos": 1}
+  ]
+}

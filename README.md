@@ -2,13 +2,267 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| Pre-entrega 5 | Agente ReAct con LangGraph: herramientas propias, razonamiento en varios pasos y memoria en SQLite | `agente/`, `probar_agente.py`, `chat_agente.py` |
 | Pre-entrega 4 | RAG escalable en Pinecone con búsqueda híbrida (BM25 + vectorial) y evaluación | `rag_pinecone/`, `setup_pinecone.py`, `ingestar_pinecone.py`, `evaluate.py`, `corpus/` |
 | Pre-entrega 3 | Sistema de recuperación semántica local (RAG) con ChromaDB | `rag/`, `ingestar.py`, `probar_rag.py`, `data/` |
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las cuatro: están en
+La instalación y las variables de entorno son las mismas para las cinco: están en
 [Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 5: agente ReAct con LangGraph y memoria en SQLite
+
+Un agente de soporte para el equipo de Atención a Comercios de Tambor (la empresa ficticia de las
+pre-entregas anteriores). Se le pregunta, por ejemplo, "¿por qué falló el último cobro de Ferretería
+López y qué tiene que hacer el comercio?". El agente decide solo qué herramientas usar y en qué orden:
+busca el comercio, trae sus cobros y consulta qué significa el código de error en la documentación.
+Recuerda la conversación por `thread_id` en un archivo SQLite, aunque se cierre el programa.
+
+Usa la configuración de las pre-entregas anteriores: el mismo `.env` y el mismo `LLM_PROVIDER`. Las
+corridas de abajo son con `claude-haiku-4-5`.
+
+## Correrlo
+
+Con el entorno instalado (ver [Instalación](#instalación)) y una key de Anthropic u OpenAI en el
+`.env`:
+
+```bash
+python probar_agente.py
+```
+
+Corre cuatro conversaciones (un caso de varios pasos con una pregunta de seguimiento, un nombre
+ambiguo, un nombre mal escrito y un saludo) y deja la traza en `evidencia/traza_agente.json` y
+`evidencia/traza_agente.log`.
+
+Una pregunta suelta, con memoria por `thread_id`:
+
+```bash
+python chat_agente.py --thread caso-102 "¿Por qué falló el último cobro de Ferretería López?"
+```
+
+```bash
+python chat_agente.py --thread caso-102 "¿Y el anterior?"
+```
+
+Cada comando es un proceso nuevo; lo que el agente recuerda del primero sale de
+`memoria_agente.sqlite`. `--historial` muestra lo guardado en un thread y `--olvidar` lo borra.
+
+La búsqueda en la documentación usa el `RAGSystem` de Pinecone de la pre-entrega 4 si hay
+`PINECONE_API_KEY` en el `.env`. Si no hay, usa BM25 en memoria sobre el mismo `corpus/`, así que el
+agente funciona sin cuenta de Pinecone. Se puede forzar con `--buscador local`.
+
+## El grafo
+
+`agente/grafo.py`:
+
+```
+START ──> agente ──tools_condition──> herramientas
+            ^         │                   │
+            │         └──(sin tool_calls)──> END
+            └─────────────────────────────┘
+```
+
+- **Estado**: `EstadoAgente` hereda de `MessagesState`, así que `messages` usa el reducer
+  `add_messages`: cada nodo agrega mensajes, no reemplaza la lista. Le sumé un campo,
+  `llamadas_herramientas: Annotated[int, operator.add]`, que acumula cuántas herramientas pidió el
+  modelo en el thread.
+- **Nodo `agente`**: el LLM con las herramientas enlazadas (`bind_tools`), con reintento ante errores
+  transitorios de la API (los mismos de la pre-entrega 2). No hay ningún `if/else` que elija una
+  herramienta: lo decide el modelo a partir de los docstrings.
+- **Nodo `herramientas`**: un `ToolNode` que ejecuta las llamadas y devuelve cada resultado como
+  `ToolMessage`.
+- **Arista condicional**: `tools_condition`. Si el último mensaje del modelo tiene `tool_calls`, va a
+  `herramientas`; si no, termina. La arista `herramientas -> agente` cierra el ciclo ReAct: el modelo
+  ve el resultado y decide si necesita otra herramienta o ya puede responder.
+- **`recursion_limit = 12`** en cada invocación. Cada vuelta del ciclo son 2 pasos, así que alcanza
+  para 5 rondas de herramientas y la respuesta. Es el techo de gasto si el modelo entra en un loop.
+
+Las dependencias (la base de datos y el buscador) entran por una fábrica de herramientas, no por el
+estado: el estado se guarda en el checkpointer después de cada nodo y no tiene que llevar conexiones
+adentro.
+
+## Herramientas
+
+`agente/herramientas.py`. Las cuatro son `async`, con `@tool`, un esquema de entrada en Pydantic y un
+docstring que dice cuándo usarlas y qué hacer después:
+
+| Herramienta | Qué hace | Entrada validada |
+|---|---|---|
+| `buscar_comercio` | busca comercios por nombre, sin importar tildes ni mayúsculas | `nombre`: al menos 2 caracteres |
+| `listar_cobros` | cobros de un comercio, del más reciente al más viejo | `comercio_id` ≥ 1, `estado` entre los 4 válidos, `limite` de 1 a 20 |
+| `consultar_cobro` | detalle de un cobro: medio de pago, intentos, código de error | `cobro_id` con formato `cob_XXXXX` |
+| `buscar_documentacion` | busca en la documentación de Tambor (catálogo de errores, API, SLA, runbooks) | `consulta` de al menos 3 caracteres, `k` de 1 a 5 |
+
+Las tres primeras consultan una base SQLite en memoria que se carga de `agente/datos_cobros.json`
+(5 comercios, 14 cobros). El modelo nunca escribe SQL: elige la herramienta y los argumentos,
+Pydantic los valida, y la consulta es siempre una de las de `BaseCobros`, parametrizada. Hay un test
+que le pasa `'; DROP TABLE comercios; --` como nombre.
+
+**Errores que vuelven al modelo.** Un comercio que no existe, un ID mal formado o la documentación
+caída no cortan el grafo. Vuelven como `ToolMessage` con `status="error"` y un mensaje que dice qué
+hacer: "No hay ningún comercio cuyo nombre contenga 'Libreria Andinna'. Nombres parecidos:
+['Librería Andina']. Probá con otra parte del nombre o pedile al usuario que lo confirme." Con eso el
+agente reintenta o pregunta. Los argumentos inválidos (un `cobro_id` sin el prefijo `cob_`) los
+devuelve el `ToolNode`; los errores de dominio son `ToolException`, que cada herramienta devuelve
+como resultado gracias a `handle_tool_error=True`.
+
+## Memoria con SqliteSaver
+
+El checkpointer es `AsyncSqliteSaver`, la versión asíncrona de `SqliteSaver` (todo el agente es
+`async`). Guarda el estado del grafo después de cada nodo en `memoria_agente.sqlite`, indexado por
+`thread_id`.
+
+Esta es la prueba con dos procesos separados (`evidencia/salida_chat_agente.txt`). El segundo comando
+pregunta por "ese error" sin decir cuál; el agente lo saca de la memoria y busca TMB-1009 directo,
+sin volver a consultar el comercio:
+
+```
+$ python chat_agente.py --thread persistencia "¿Qué cobros rechazados tuvo el Café del Puerto?"
+[persistencia] llama a buscar_comercio({'nombre': 'Café del Puerto'})
+[persistencia] llama a listar_cobros({'comercio_id': 103, 'estado': 'rechazado'})
+[persistencia] responde: El Café del Puerto (ID 103) tuvo 1 cobro rechazado: cob_7F3N4 ... TMB-1009
+
+# --- proceso nuevo, mismo thread_id ---
+$ python chat_agente.py --thread persistencia "¿Qué tiene que hacer el comercio con ese error?"
+[persistencia] llama a buscar_documentacion({'consulta': 'TMB-1009'})
+[persistencia] responde: El error TMB-1009 indica un conflicto de idempotencia ...
+```
+
+**Estado sucio.** El estado guarda la conversación entera, pero al modelo no hace falta mandarle todo
+en cada paso. El nodo `agente` recorta el historial con `trim_messages` a unos 6.000 tokens,
+empezando siempre en un mensaje del usuario, así nunca separa una llamada a herramienta de su
+resultado. El checkpointer conserva todo; lo que se recorta es lo que viaja a la API.
+
+## Traza del razonamiento
+
+`probar_agente.py` recorre el grafo con `astream(stream_mode="updates")` y arma, por cada turno, un
+`Turno` de Pydantic con cada paso (razonamiento, llamada con sus argumentos, resultado, respuesta),
+los tokens, la duración y cuántos mensajes quedaron en memoria. La traza completa está en
+`evidencia/traza_agente.json` y el log en `evidencia/traza_agente.log`. Así quedó la primera
+conversación:
+
+```
+[caso-ferreteria] usuario: ¿Por qué falló el último cobro de Ferretería López y qué tiene que hacer el comercio?
+[caso-ferreteria] razona: Voy a buscar a Ferretería López para obtener su ID y luego revisar sus cobros.
+[caso-ferreteria] llama a buscar_comercio({'nombre': 'Ferretería López'})
+[caso-ferreteria] resultado de buscar_comercio -> {"comercios": [{"id": 102, "nombre": "Ferretería López", ...}]}
+[caso-ferreteria] razona: Perfecto. Ahora traigo el último cobro rechazado:
+[caso-ferreteria] llama a listar_cobros({'comercio_id': 102, 'estado': 'rechazado', 'limite': 1})
+[caso-ferreteria] resultado de listar_cobros -> {"cobros": [{"id": "cob_7F3K2", ..., "codigo_error": "TMB-2031"}]}
+[caso-ferreteria] razona: Ahora busco qué significa el código de error TMB-2031:
+[caso-ferreteria] llama a buscar_documentacion({'consulta': 'TMB-2031'})
+[caso-ferreteria] resultado de buscar_documentacion -> {"fragmentos": [{"fuente": "catalogo-errores.json", "seccion": "TMB-2031", ...}]}
+[caso-ferreteria] responde: El último cobro rechazado de Ferretería López es el cob_7F3K2 del 6 de octubre de 2026 por $45.990,00 ARS. Razón de la falla: código de error TMB-2031 ...
+[caso-ferreteria] turno resuelto en 13.5 s: 3 llamada(s) a herramientas, 10012 tokens de entrada / 461 de salida, 8 mensajes en memoria
+[caso-ferreteria] usuario: ¿Y el cobro anterior a ese? ¿También tuvo problemas?
+[caso-ferreteria] llama a listar_cobros({'comercio_id': 102, 'limite': 5})
+[caso-ferreteria] razona: El cobro anterior (cob_7F1A9 del 5 de octubre, $12.500,00 ARS) sí tiene problemas: está en_revision con el código de error TMB-2012. Busco qué significa ese error
+[caso-ferreteria] llama a buscar_documentacion({'consulta': 'TMB-2012'})
+[caso-ferreteria] responde: Sí, el cobro anterior también tiene problemas: el cobro cob_7F1A9 ... TMB-2012 - Timeout del adquirente ...
+```
+
+En la segunda pregunta el agente ya sabe que se habla del comercio 102 y del cobro `cob_7F3K2`: va
+directo a `listar_cobros(comercio_id=102)` sin buscar el comercio de nuevo.
+
+Resumen de la corrida (`evidencia/salida_probar_agente.txt`):
+
+| Conversación | Pregunta | Herramientas | Tokens entrada / salida | Tiempo |
+|---|---|---|---|---|
+| caso-ferreteria | ¿Por qué falló el último cobro de Ferretería López…? | `buscar_comercio` → `listar_cobros` → `buscar_documentacion` | 10.012 / 461 | 13,5 s |
+| caso-ferreteria | ¿Y el cobro anterior a ese? | `listar_cobros` → `buscar_documentacion` | 11.244 / 396 | 5,9 s |
+| caso-lopez | Mostrame los cobros rechazados de López. | `buscar_comercio` (2 resultados: pide aclaración) | 4.481 / 144 | 2,5 s |
+| caso-lopez | El de la farmacia. | `listar_cobros` (comercio 104, sin repreguntar) | 5.034 / 199 | 2,8 s |
+| caso-nombre-mal-escrito | ¿Cuál fue el último cobro de la Libreria Andinna…? | `buscar_comercio` (error con sugerencia: pide confirmación) | 4.447 / 120 | 2,5 s |
+| caso-nombre-mal-escrito | Sí, esa. | `buscar_comercio` → `listar_cobros` | 7.473 / 228 | 3,8 s |
+| caso-sin-herramientas | Hola, ¿qué tipo de consultas puedo hacerte? | ninguna | 2.139 / 291 | 3,3 s |
+
+## Lo que encontré
+
+**El modelo no siempre hace el mismo camino, y está bien.** En una corrida anterior, para "¿Y el
+cobro anterior a ese?" el agente no llamó a `listar_cobros`: el resultado del turno anterior ya tenía
+los últimos 5 cobros, y respondió con eso. En la corrida que quedó en la evidencia, en el primer
+turno pidió solo el último cobro rechazado (`limite: 1`), así que en el segundo tuvo que volver a
+listar. Las dos respuestas son correctas. La traza sirve justamente para ver por qué el agente hizo lo
+que hizo, en vez de suponerlo.
+
+**Ante un nombre mal escrito, el agente prefirió confirmar.** Esperaba que con la sugerencia
+"Librería Andina" reintentara solo. En cambio preguntó "¿Es ese el que buscás?", y con el "Sí, esa."
+del usuario completó la búsqueda. El prompt le dice que pregunte si no está claro de qué comercio se
+trata, y con datos de cobros me parece el comportamiento correcto. La consigna acepta las dos cosas
+(segundo intento o pedir aclaraciones).
+
+**Cortar por `recursion_limit` deja el thread roto si no se arregla.** Si el límite salta justo
+después de que el modelo pidió una herramienta, el historial queda con una llamada sin resultado, y la
+API de Anthropic rechaza cualquier mensaje siguiente de ese thread. `_cerrar_turno_cortado` agrega un
+resultado que dice que la herramienta no se ejecutó y una respuesta final. Lo probé solo con el modelo
+falso de los tests, que pide herramientas para siempre; con el modelo real ninguna conversación se
+acercó al límite (la que más usó fueron 3 rondas).
+
+**En LangGraph 1.x, `ToolNode` no atrapa cualquier excepción.** Por defecto solo devuelve al modelo
+los errores de validación de argumentos; una excepción de la herramienta corta el grafo. Los errores
+esperables los lanzo como `ToolException` con `handle_tool_error=True`, y en `buscar_documentacion`
+convierto cualquier falla del buscador (Pinecone caído, sin red) en un `ToolException`.
+
+**El checkpointer no crea sus tablas solo.** La primera corrida falló con `no such table:
+checkpoints` al borrar un thread antes de la primera pregunta. `AsyncSqliteSaver` crea las tablas
+recién en el primer guardado, salvo que se llame a `setup()`, que ahora va al abrir el agente.
+
+**Cada ronda del ciclo vuelve a mandar todo.** El saludo, sin herramientas, ya son 2.139 tokens de
+entrada: el prompt de sistema más los esquemas de las cuatro herramientas. La pregunta de tres pasos
+llega a 10.012, porque cada vuelta del ciclo manda el historial con los resultados anteriores. Por
+eso los resultados de las herramientas son JSON compacto y los fragmentos de documentación se cortan
+en 900 caracteres.
+
+**La primera búsqueda en la documentación tarda unos 6 segundos.** Es la carga del modelo de
+embeddings y del corpus de BM25 desde Pinecone, que se hace recién cuando el agente busca algo por
+primera vez. Las siguientes tardan menos de un segundo, y el agente que solo saluda no la paga nunca.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_agente.py
+```
+
+Son 21 tests sin API keys. El LLM es un chat model falso que devuelve un guion de mensajes, con o sin
+`tool_calls`, y guarda lo que recibió en cada llamada. La base, las herramientas, el `ToolNode`, el
+grafo y el `AsyncSqliteSaver` (en un archivo temporal) son los reales. Cubren:
+
+- base de datos: búsqueda sin tildes y por palabras, orden y filtros, que la entrada nunca se ejecute
+  como SQL;
+- herramientas: nombre ambiguo, nombre inexistente con sugerencias, comercio inexistente, argumentos
+  inválidos, documentación local y documentación caída;
+- grafo: la estructura (el ciclo y las dos salidas de `tools_condition`), un ciclo ReAct de tres
+  herramientas, una respuesta sin herramientas, el error y el segundo intento;
+- memoria: dos agentes distintos sobre el mismo archivo con el mismo `thread_id` (el segundo ve la
+  conversación del primero) y otro `thread_id` que no ve nada;
+- el corte por `recursion_limit` y que el thread siga usable después;
+- el recorte del historial que se manda al modelo.
+
+Con los de las pre-entregas anteriores son 191:
+
+```bash
+python -m pytest -q
+```
+
+## Archivos
+
+```
+agente/
+  datos_cobros.json         base simulada: 5 comercios y 14 cobros
+  datos.py                  BaseCobros: SQLite en memoria, solo consultas parametrizadas
+  documentacion.py          buscador: Pinecone (pre-entrega 4) o BM25 local
+  herramientas.py           las 4 herramientas (@tool + Pydantic)
+  grafo.py                  EstadoAgente, StateGraph, AsyncSqliteSaver, traza, recursion_limit
+probar_agente.py            4 conversaciones de prueba y la traza
+chat_agente.py              una pregunta por proceso, con --thread, --historial y --olvidar
+evidencia/
+  traza_agente.json         la traza paso a paso de probar_agente.py
+  traza_agente.log          el mismo recorrido como log
+  salida_probar_agente.txt  la salida de consola
+  salida_chat_agente.txt    la prueba de memoria entre dos procesos
+tests/test_agente.py        21 tests sin API keys
+```
 
 # Pre-entrega 4: RAG escalable en Pinecone con búsqueda híbrida
 
