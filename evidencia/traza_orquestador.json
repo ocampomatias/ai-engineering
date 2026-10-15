@@ -1,0 +1,124 @@
+[
+  {
+    "pedido": "Analizá los últimos 5 cobros de Ferretería López: qué porcentaje se rechazó, cuánta plata quedó sin cobrar y qué tiene que hacer el comercio con cada código de error.",
+    "respuesta_final": "**RESPUESTA FINAL - Equipo de Atención a Comercios de Tambor**\n\n---\n\n**Análisis de últimos 5 cobros - Ferretería López**\n\n**Porcentaje rechazado:** 18,45% del monto total (45.990,00 ARS rechazados sobre 249.290,00 ARS).\n\n**Dinero sin cobrar:** 58.490,00 ARS distribuido en:\n- **Rechazado** (ID cob_7F3K2): 45.990,00 ARS\n- **En revisión** (ID cob_7F1A9): 12.500,00 ARS\n\n---\n\n**Acciones por código de error:**\n\n| Código | Error | Acción |\n|--------|-------|--------|\n| **TMB-2031** (cob_7F3K2) | Autenticación 3-D Secure fallida | Ofrecer reintentar pago. Después de 3 intentos fallidos, la tarjeta se bloquea 24 horas. |\n| **TMB-2012** (cob_7F1A9) | Timeout del adquirente | NO crear cobro nuevo. Consultar estado con GET /v2/cobros/{id}. Tambor resuelve en máximo 2 horas. |\n\n---\n\n*Nota: El cobro en revisión (cob_7F1A9) está pendiente de resolución automática por Tambor.*",
+    "recorrido": [
+      "supervisor",
+      "investigador",
+      "supervisor",
+      "analista",
+      "supervisor",
+      "sintesis"
+    ],
+    "decisiones": [
+      {
+        "evaluacion": "No hay aportes aún. El pedido requiere información sobre los últimos 5 cobros de Ferretería López (IDs, montos, estados, códigos de error) que solo el investigador puede obtener de la base de datos.",
+        "siguiente": "investigador",
+        "instruccion": "Trae los últimos 5 cobros de Ferretería López con: ID de cobro, monto, estado (aprobado/rechazado/pendiente), código de error (si aplica) y fecha. Usá las definiciones de estados y códigos que tiene la plataforma.",
+        "motivo": "Necesitamos datos concretos de los cobros antes de poder hacer cálculos de porcentaje y montos sin cobrar."
+      },
+      {
+        "evaluacion": "El investigador entregó datos concretos y verificables: 5 cobros con IDs específicos (cob_7F3K2, cob_7F1A9, cob_7E8Q4, cob_7E2M7, cob_7D9X1), montos en ARS, estados oficiales de la plataforma, códigos de error con sus definiciones. Responde la instrucción de traer los datos base. Sin embargo, el pedido del usuario pide tres análisis: (1) porcentaje rechazado, (2) plata sin cobrar, (3) acciones por código de error. Los datos están listos pero no procesados.",
+        "siguiente": "analista",
+        "instruccion": "Con los 5 cobos de Ferretería López: (1) Calculá qué porcentaje del total de monto fue rechazado (estado \"rechazado\"). (2) Sumá cuánto dinero quedó sin cobrar, especificando qué estados considerás como \"sin cobrar\" (rechazado, pendiente, en_revision, reembolsado, etc.) y mostrá el monto por estado. (3) Listá qué tiene que hacer el comercio ante cada código de error que aparece en los datos (TMB-2031 y TMB-2012).",
+        "motivo": "El analista necesita calcular el porcentaje de rechazo, identificar qué monto quedó sin cobrar (rechazado + en_revision + reembolsado), y luego sintetizar las acciones por código de error que ya están documentadas."
+      },
+      {
+        "evaluacion": "El aporte del analista responde totalmente la instrucción que recibió y que derivaba del pedido del usuario. Los datos son concretos: identifica dos códigos de error (TMB-2031 y TMB-2012) con acciones específicas, calcula el porcentaje rechazado (18,45%), suma el dinero sin cobrar ($58.490 ARS) desglosado por estado, y ofrece definiciones de qué cuenta como \"sin cobrar\" usando las definiciones que el investigador trajo de la plataforma. No hay huecos ni supuestos injustificados. Con los aportes del investigador y el analista, se cubren todas las partes del pedido: el desglose de los 5 cobros, el porcentaje rechazado, el dinero sin cobrar y las acciones ante cada código de error.",
+        "siguiente": "sintesis",
+        "instruccion": "",
+        "motivo": "Los datos están completos y validados; está todo listo para redactar la respuesta final al usuario."
+      }
+    ],
+    "aportes": [
+      {
+        "agente": "investigador",
+        "instruccion": "Trae los últimos 5 cobros de Ferretería López con: ID de cobro, monto, estado (aprobado/rechazado/pendiente), código de error (si aplica) y fecha. Usá las definiciones de estados y códigos que tiene la plataforma.",
+        "contenido": "## Últimos 5 cobros de Ferretería López\n\n| ID Cobro | Fecha | Monto | Estado | Código Error | Definición |\n|----------|-------|-------|--------|--------------|-----------|\n| **cob_7F3K2** | 2026-10-06 19:42:10 | 45.990,00 ARS | **rechazado** | TMB-2031 | **Autenticación 3-D Secure fallida**: El comprador no completó el desafío de 3-D Secure o lo completó mal. Ofrecer reintentar el pago. Después de 3 intentos fallidos la tarjeta se bloquea 24 horas para ese comercio. |\n| **cob_7F1A9** | 2026-10-05 21:03:55 | 12.500,00 ARS | **en_revision** | TMB-2012 | **Timeout del adquirente**: El adquirente no respondió la autorización en 25 segundos. El estado real del cobro es incierto hasta la conciliación. No crear un cobro nuevo: consultar el estado con GET /v2/cobros/{id}. Tambor resuelve el estado final como máximo en 2 horas. |\n| **cob_7E8Q4** | 2026-10-04 11:15:02 | 8.700,00 ARS | **aprobado** | — | — |\n| **cob_7E2M7** | 2026-10-02 16:48:31 | 23.100,00 ARS | **aprobado** | — | — |\n| **cob_7D9X1** | 2026-09-29 10:05:44 | 159.000,00 ARS | **reembolsado** | — | — |",
+        "herramientas": [
+          "buscar_comercio",
+          "listar_cobros",
+          "buscar_documentacion",
+          "buscar_documentacion"
+        ],
+        "error": false,
+        "ms": 24568.413499975577
+      },
+      {
+        "agente": "analista",
+        "instruccion": "Con los 5 cobos de Ferretería López: (1) Calculá qué porcentaje del total de monto fue rechazado (estado \"rechazado\"). (2) Sumá cuánto dinero quedó sin cobrar, especificando qué estados considerás como \"sin cobrar\" (rechazado, pendiente, en_revision, reembolsado, etc.) y mostrá el monto por estado. (3) Listá qué tiene que hacer el comercio ante cada código de error que aparece en los datos (TMB-2031 y TMB-2012).",
+        "contenido": "---\n\n## RESULTADOS\n\n### (1) Porcentaje del total de monto rechazado\n\n**Porcentaje rechazado: 18,45 %**\n\n- Monto rechazado: 45.990,00 ARS\n- Total de montos: 249.290,00 ARS\n\n### (2) Dinero sin cobrar por estado\n\nConsiderando como \"sin cobrar\" los estados: **rechazado** y **en_revision** (estados que no representan dinero efectivamente cobrado).\n\n| Estado | Monto |\n|--------|-------|\n| **Rechazado** | 45.990,00 ARS |\n| **En revisión** | 12.500,00 ARS |\n| **Total sin cobrar** | 58.490,00 ARS |\n\n*Nota: El estado \"reembolsado\" (159.000,00 ARS) fue dinero que se cobró pero después se devolvió, por lo que técnicamente es dinero sin cobrar final.*\n\n### (3) Acciones del comercio por código de error\n\n| Código | Problema | Qué hacer |\n|--------|----------|-----------|\n| **TMB-2031** | Autenticación 3-D Secure fallida | Ofrecer al comprador reintentar el pago. Tener en cuenta que después de 3 intentos fallidos la tarjeta se bloquea 24 horas para ese comercio. |\n| **TMB-2012** | Timeout del adquirente | NO crear un nuevo cobro. Consultar el estado con GET /v2/cobros/{id}. Tambor resuelve el estado final en máximo 2 horas. |",
+        "herramientas": [
+          "estadisticas_cobros",
+          "calcular"
+        ],
+        "error": false,
+        "ms": 8101.843900047243
+      }
+    ],
+    "duracion_ms": 49240.71279994678
+  },
+  {
+    "pedido": "Compará la tasa de rechazo de Librería Andina y Café del Puerto. ¿Cuál está peor y por qué?",
+    "respuesta_final": "**RESPUESTA – EQUIPO DE ATENCIÓN A COMERCIOS**\n\n---\n\n**Comparación de tasas de rechazo:**\n\nAmbos comercios tienen la **misma tasa de rechazo: 33,3%** (1 rechazo de 3 cobros intentados en el período analizado).\n\n- **Librería Andina (ID: 101):** 1 rechazo en período 2026-10-03 a 2026-10-06\n- **Café del Puerto (ID: 103):** 1 rechazo en período 2026-10-04 a 2026-10-06\n\n---\n\n**¿Cuál está peor y por qué?**\n\n**Café del Puerto está en peor situación**, aunque el porcentaje sea igual.\n\n- **Librería Andina** (cob_7F0C3): Rechazo por código **TMB-2004** (fondos insuficientes). Es un problema del cliente final, no del comercio. Evento aislado y normal.\n\n- **Café del Puerto** (cob_7F3N4): Rechazo por código **TMB-1009** (conflicto de idempotencia). Indica un **defecto en la integración técnica del comercio**: están reutilizando la misma `Idempotency-Key` con datos distintos. Es un problema sistemático que requiere corrección inmediata en su implementación.\n\nLa causa de Café del Puerto revela un problema operativo recurrente, mientras que la de Librería Andina es un evento puntual del cliente.",
+    "recorrido": [
+      "supervisor",
+      "investigador",
+      "supervisor",
+      "analista",
+      "supervisor",
+      "sintesis"
+    ],
+    "decisiones": [
+      {
+        "evaluacion": "Todavía no hay aportes del equipo. El pedido del usuario requiere comparar tasas de rechazo de dos comercios específicos.",
+        "siguiente": "investigador",
+        "instruccion": "Obtenė el historial de cobros de \"Librería Andina\" y \"Café del Puerto\". Para cada uno, traé: cantidad total de cobros intentados, cantidad de cobros rechazados (indicá qué estados o códigos de rechazo consultaste en la base), y el período de tiempo considerado.",
+        "motivo": "Necesitamos datos concretos de ambos comercios antes de calcular y comparar tasas. El investigador debe consultar la base de cobros y usar las definiciones internas de \"rechazo\"."
+      },
+      {
+        "evaluacion": "El investigador respondió correctamente a la instrucción. Entregó datos concretos y verificables: IDs de cobros (cob_7F2B6, cob_7F0C3, etc.), montos exactos, códigos de rechazo consultados (TMB-2004 y TMB-1009) con sus descripciones, y períodos de tiempo. Ambos comercios tienen 3 cobros intentados y 1 rechazado cada uno, pero por razones completamente diferentes: uno por fondos insuficientes (problema del cliente), otro por un error técnico de idempotencia (problema operativo de Café del Puerto). No hay huecos en los datos.",
+        "siguiente": "analista",
+        "instruccion": "Con los datos del investigador, calculá la tasa de rechazo (porcentaje) para cada comercio. Luego, analizá cuál está en peor situación: considera no solo el porcentaje sino también la causa del rechazo (TMB-2004 vs TMB-1009). ¿Cuál de los dos tiene un problema más grave y por qué?",
+        "motivo": "Ya hay datos concretos para calcular y comparar las tasas de rechazo, pero falta análisis: calcular el porcentaje exacto para cada uno y validar cuál está realmente peor considerando también la causa del rechazo (no es lo mismo un problema del cliente que un error operativo)."
+      },
+      {
+        "evaluacion": "El investigador respondió la instrucción: trajo datos concretos (IDs de comercios, IDs de cobros, montos, códigos de rechazo, períodos). Sin embargo, el período considerado es muy corto (3-4 días cada uno) y no quedó claro si es una selección arbitraria o el rango disponible. No es un error grave porque los datos son verificables y permitieron al analista trabajar.\n\nEl analista respondió completamente: calculó las tasas de rechazo (33,3% cada uno), diferenció por tipo de problema (TMB-2004 vs TMB-1009), analizó gravedad y impacto, y concluyó que Café del Puerto está en peor situación por ser un problema técnico sistemático vs. un evento aislado del cliente. Todo es concreto y argumentado.",
+        "siguiente": "sintesis",
+        "instruccion": "",
+        "motivo": "Ya hay datos verificables, cálculos completos y análisis de causa-efecto que permiten responder el pedido del usuario. No falta información ni hay inconsistencias que requieran otra vuelta."
+      }
+    ],
+    "aportes": [
+      {
+        "agente": "investigador",
+        "instruccion": "Obtenė el historial de cobros de \"Librería Andina\" y \"Café del Puerto\". Para cada uno, traé: cantidad total de cobros intentados, cantidad de cobros rechazados (indicá qué estados o códigos de rechazo consultaste en la base), y el período de tiempo considerado.",
+        "contenido": "## Resumen del Historial de Cobros\n\n### **LIBRERÍA ANDINA** (ID: 101)\n- **Plan:** Pro | **Estado:** Activo | **Alta:** 2024-03-11\n\n| Métrica | Valor |\n|---------|-------|\n| **Cantidad total de cobros intentados** | 3 |\n| **Cantidad de cobros rechazados** | 1 |\n| **Período considerado** | 2026-10-03 a 2026-10-06 |\n\n**Detalle de cobros:**\n1. cob_7F2B6 | 2026-10-06 13:20 | 32.000,00 ARS | **Aprobado**\n2. cob_7F0C3 | 2026-10-05 09:12 | 56,00 USD | **Rechazado** → Código: **TMB-2004**\n3. cob_7E5R8 | 2026-10-03 18:30 | 18.750,00 ARS | **Aprobado**\n\n**Código de rechazo consultado:**\n- **TMB-2004:** Fondos insuficientes. La tarjeta no tiene saldo o límite disponible para el monto. El cobro no se reintenta automáticamente.\n\n---\n\n### **CAFÉ DEL PUERTO** (ID: 103)\n- **Plan:** Empresa | **Estado:** Activo | **Alta:** 2023-08-02\n\n| Métrica | Valor |\n|---------|-------|\n| **Cantidad total de cobros intentados** | 3 |\n| **Cantidad de cobros rechazados** | 1 |\n| **Período considerado** | 2026-10-04 a 2026-10-06 |\n\n**Detalle de cobros:**\n1. cob_7F3P0 | 2026-10-06 20:55 | 6.400,00 ARS | **Aprobado**\n2. cob_7F3N4 | 2026-10-06 20:51 | 6.400,00 ARS | **Rechazado** → Código: **TMB-1009**\n3. cob_7E9T5 | 2026-10-04 08:41 | 11.200,00 ARS | **Aprobado**\n\n**Código de rechazo consultado:**\n- **TMB-1009:** Conflicto de idempotencia. Se reusó una `Idempotency-Key` con un cuerpo distinto al del pedido original dentro de las 24 horas. La acción recomendada es generar una clave de idempotencia nueva por cada operación distinta.",
+        "herramientas": [
+          "buscar_comercio",
+          "buscar_comercio",
+          "listar_cobros",
+          "listar_cobros",
+          "buscar_documentacion",
+          "buscar_documentacion"
+        ],
+        "error": false,
+        "ms": 12807.02300008852
+      },
+      {
+        "agente": "analista",
+        "instruccion": "Con los datos del investigador, calculá la tasa de rechazo (porcentaje) para cada comercio. Luego, analizá cuál está en peor situación: considera no solo el porcentaje sino también la causa del rechazo (TMB-2004 vs TMB-1009). ¿Cuál de los dos tiene un problema más grave y por qué?",
+        "contenido": "## Resultados del análisis:\n\n**Tasa de rechazo por comercio:**\n- **LIBRERÍA ANDINA (ID: 101):** 33,3%\n- **CAFÉ DEL PUERTO (ID: 103):** 33,3%\n\nAmbos comercios tienen **la misma tasa de rechazo** (1 de 3 cobros rechazados = 33,3%), pero la **naturaleza del problema es muy diferente**:\n\n### Análisis de gravedad:\n\n**LIBRERÍA ANDINA - TMB-2004 (Fondos insuficientes)**\n- **Tipo:** Problema del cliente (tarjetahabiente sin saldo)\n- **Impacto:** El rechazo es legítimo y esperado. No hay error del comercio ni de la plataforma\n- **Reintento:** No se reintenta automáticamente (depende del cliente reponer fondos)\n- **Severidad:** Baja – es una limitación temporal del cliente, no del comercio\n\n**CAFÉ DEL PUERTO - TMB-1009 (Conflicto de idempotencia)**\n- **Tipo:** Problema operativo del comercio (uso incorrecto de la API)\n- **Impacto:** El comercio está reutilizando la misma `Idempotency-Key` con datos distintos, violando el protocolo de integración\n- **Reintento:** No se ejecuta; requiere que el comercio corrija su implementación\n- **Severidad:** **ALTA** – indica un defecto en la integración técnica del comercio\n\n### Conclusión:\n\n**CAFÉ DEL PUERTO está en peor situación.** Aunque ambos tienen 33,3% de rechazo, la causa de CAFÉ DEL PUERTO revela un **problema sistemático de implementación técnica** que afecta la confiabilidad de sus integraciones futuras. En cambio, LIBRERÍA ANDINA tiene un rechazo aislado por falta de fondos del cliente, que es un evento normal en cualquier plataforma de cobros.",
+        "herramientas": [
+          "estadisticas_cobros",
+          "estadisticas_cobros",
+          "calcular",
+          "calcular"
+        ],
+        "error": false,
+        "ms": 10518.288800027221
+      }
+    ],
+    "duracion_ms": 39548.02800004836
+  }
+]

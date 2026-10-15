@@ -2,14 +2,238 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| Pre-entrega 6 | Orquestador multi-agente con LangGraph: supervisor, investigador y analista con estado compartido | `orquestador/`, `probar_orquestador.py`, `demo_orquestador.ipynb` |
 | Pre-entrega 5 | Agente ReAct con LangGraph: herramientas propias, razonamiento en varios pasos y memoria en SQLite | `agente/`, `probar_agente.py`, `chat_agente.py` |
 | Pre-entrega 4 | RAG escalable en Pinecone con búsqueda híbrida (BM25 + vectorial) y evaluación | `rag_pinecone/`, `setup_pinecone.py`, `ingestar_pinecone.py`, `evaluate.py`, `corpus/` |
 | Pre-entrega 3 | Sistema de recuperación semántica local (RAG) con ChromaDB | `rag/`, `ingestar.py`, `probar_rag.py`, `data/` |
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las cinco: están en
+La instalación y las variables de entorno son las mismas para las seis: están en
 [Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 6: orquestador multi-agente con supervisor
+
+Un pedido de análisis del equipo de Atención a Comercios de Tambor (la empresa ficticia de las
+pre-entregas anteriores) pasa por un **supervisor**, que delega en dos especialistas: un
+**investigador**, que consulta la base de cobros y la documentación, y un **analista**, que hace los
+cálculos. Cuando el supervisor considera que hay todo lo necesario, una **síntesis** redacta la
+respuesta final. Por ejemplo: "Analizá los últimos 5 cobros de Ferretería López: qué porcentaje se
+rechazó, cuánta plata quedó sin cobrar y qué tiene que hacer el comercio con cada código de error".
+
+**Demo del flujo:** [`demo_orquestador.ipynb`](demo_orquestador.ipynb), ejecutado contra
+`claude-haiku-4-5` con las salidas guardadas. GitHub lo muestra directamente.
+
+## El grafo
+
+Generado con `grafo.get_graph().draw_mermaid()` (está también en `evidencia/grafo_orquestador.mmd`
+y como imagen en `evidencia/grafo_orquestador.png`):
+
+```mermaid
+graph TD;
+	__start__([__start__]):::first
+	supervisor(supervisor)
+	investigador(investigador)
+	analista(analista)
+	sintesis(sintesis)
+	__end__([__end__]):::last
+	__start__ --> supervisor;
+	analista --> supervisor;
+	investigador --> supervisor;
+	supervisor -.-> analista;
+	supervisor -.-> investigador;
+	supervisor -.-> sintesis;
+	sintesis --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+```
+
+Las flechas punteadas son la arista condicional del supervisor. La función `rutear` devuelve un
+`Literal["investigador", "analista", "sintesis"]`, así el grafo conoce de antemano todos los destinos
+posibles. Los especialistas siempre vuelven al supervisor; solo la síntesis llega al final.
+
+## Por qué una topología jerárquica
+
+El trabajo tiene un orden natural: primero se consiguen los datos, después se calcula y al final se
+redacta. Además, los números van a un equipo que atiende comercios, así que importa que alguien
+revise los resultados antes de responder. Las dos cosas apuntan a un supervisor:
+
+- **Un solo punto que decide y valida.** Todo el flujo se puede leer en las decisiones del
+  supervisor: quién trabajó, con qué instrucción y por qué. En una topología colaborativa no habría
+  un rastro lineal que seguir.
+- **Especialistas aislados.** El investigador no sabe que existe el analista, ni al revés. Se puede
+  cambiar uno sin tocar al otro: el investigador reutiliza tal cual las herramientas de la
+  pre-entrega 5.
+- **El costo es el cuello de botella.** Cada vuelta pasa por el supervisor: en las corridas de abajo
+  son 3 llamadas al supervisor por pedido, además de los especialistas. Con dos especialistas es
+  aceptable; con diez convendría un supervisor con un modelo más capaz o supervisores por área.
+  `construir_orquestador` ya acepta un modelo distinto para el supervisor y para los especialistas.
+
+## Cómo se manejan los conflictos entre agentes
+
+- **Nadie pisa el trabajo de otro.** Cada campo del estado tiene un único nodo que lo escribe
+  (tabla abajo). Los aportes se *acumulan* con un reducer: si el investigador trabaja dos veces, las
+  dos versiones quedan, no la última encima de la primera.
+- **Lo que pasa de un agente a otro está validado.** Cada aporte es un `Aporte` de Pydantic y cada
+  decisión del supervisor una `Decision`. Si el modelo propone un destino que no existe o delega sin
+  instrucción, la validación falla y la llamada se reintenta.
+- **El supervisor arbitra.** Evalúa cada aporte con una rúbrica escrita en su prompt (¿responde la
+  instrucción?, ¿los datos son concretos?, ¿falta algo?) y puede devolverle la tarea al mismo
+  especialista diciendo qué corregir.
+- **Los errores no rompen el grafo.** Si un especialista falla (API caída, límite de pasos), el
+  nodo devuelve un aporte con `error=True` y el supervisor decide: reintentar, cambiar de enfoque o
+  sintetizar con lo que hay.
+- **Hay condición de parada.** Después de 6 delegaciones (`MAX_DELEGACIONES`), el supervisor pasa a
+  la síntesis sin consultar al modelo. Un supervisor que nunca queda conforme no gasta API sin fin.
+  Además, el grafo corre con `recursion_limit=16` y cada especialista con un límite propio de 12 pasos.
+
+## Estado compartido (`orquestador/state.py`)
+
+`EstadoOrquestador` hereda de `MessagesState`:
+
+| Campo | Lo escribe | Cómo se actualiza |
+|---|---|---|
+| `messages` | todos (con `name` = el agente) | `add_messages` |
+| `aportes: list[Aporte]` | investigador y analista | `operator.add`: se acumulan |
+| `decisiones: list[Decision]` | supervisor | `operator.add`: se acumulan |
+| `siguiente`, `instruccion` | supervisor | se reemplazan |
+| `respuesta_final` | síntesis | se reemplaza |
+
+Un `Aporte` registra qué agente lo hizo, con qué instrucción, qué herramientas llamó, si falló y
+cuánto tardó. Así se puede rastrear quién contribuyó con cada dato.
+
+**Contexto acotado.** Los especialistas no reciben el historial completo. Reciben la instrucción del
+supervisor y los aportes válidos del *otro* especialista: el analista necesita los cobros que trajo
+el investigador, pero no las deliberaciones del supervisor. El supervisor tampoco lee los mensajes:
+lee el pedido y un resumen de los aportes.
+
+## Los agentes (`orquestador/agents/`)
+
+| Agente | Archivo | Herramientas | Qué hace |
+|---|---|---|---|
+| Supervisor | `supervisor.py` | ninguna (salida estructurada `Decision`) | decide quién trabaja, con qué instrucción, y valida con la rúbrica |
+| Investigador | `research_agent.py` | `buscar_comercio`, `listar_cobros`, `consultar_cobro`, `buscar_documentacion` | consigue los datos: base de cobros (SQLite) y documentación (Pinecone o BM25 local) |
+| Analista | `analyst_agent.py` | `estadisticas_cobros`, `calcular` | cuenta, suma montos y calcula porcentajes; valida los datos |
+| Síntesis | `supervisor.py` | ninguna | redacta la respuesta final solo con lo que está en los aportes |
+
+Los dos especialistas son agentes ReAct armados con `create_react_agent` de LangGraph
+(`especialista.py`), cada uno con sus herramientas y su prompt.
+
+Las herramientas del analista hacen las cuentas en Python, no en el modelo.
+`estadisticas_cobros` recibe los cobros con el monto tal como lo da el investigador
+(`"45.990,00 ARS"`), los parsea a `Decimal` y devuelve cantidades por estado, tasas y montos por
+moneda. Los montos en ARS y en USD nunca se suman entre sí. `calcular` evalúa aritmética simple
+recorriendo el árbol de `ast`, sin `eval`: un test le pasa `__import__('os').system(...)` y
+`2 ** 999999`, y las dos fallan.
+
+## Correrlo
+
+Con el entorno instalado (ver [Instalación](#instalación)) y la key de Anthropic u OpenAI en el
+`.env`:
+
+```bash
+python probar_orquestador.py
+```
+
+Corre dos pedidos y deja la traza en `evidencia/traza_orquestador.json` y
+`evidencia/traza_orquestador.log`. Para un pedido propio:
+
+```bash
+python probar_orquestador.py --pedido "¿Qué tasa de rechazo tiene el Café del Puerto?"
+```
+
+Para volver a ejecutar el notebook hace falta Jupyter (`pip install notebook`), que no está en
+`requirements.txt` porque no lo necesita el resto del proyecto.
+
+## Resultados
+
+`python probar_orquestador.py` con `claude-haiku-4-5` (`evidencia/salida_probar_orquestador.txt`):
+
+| Pedido | Recorrido | Herramientas | Tiempo |
+|---|---|---|---|
+| Últimos 5 cobros de Ferretería López: % rechazado, plata sin cobrar y qué hacer con cada error | supervisor → investigador → supervisor → analista → supervisor → síntesis | investigador: `buscar_comercio`, `listar_cobros`, `buscar_documentacion` ×2; analista: `estadisticas_cobros`, `calcular` | 49,2 s |
+| Compará la tasa de rechazo de Librería Andina y Café del Puerto | supervisor → investigador → supervisor → analista → supervisor → síntesis | investigador: `buscar_comercio` ×2, `listar_cobros` ×2, `buscar_documentacion` ×2; analista: `estadisticas_cobros` ×2, `calcular` ×2 | 39,5 s |
+
+Las respuestas, contrastadas con la base:
+
+- **Ferretería López:** 58.490,00 ARS sin cobrar (`cob_7F3K2` rechazado por TMB-2031 y `cob_7F1A9`
+  en revisión por TMB-2012), con qué hacer en cada caso según el catálogo de errores.
+- **Comparación:** las dos tienen 33,3 % de rechazo (1 de 3 cobros). Según la respuesta, el Café del
+  Puerto está peor porque su rechazo (TMB-1009, conflicto de idempotencia) es un error de su
+  integración, mientras que el de la Librería Andina (TMB-2004, fondos insuficientes) depende del
+  comprador.
+
+## Lo que encontré
+
+**El supervisor inventaba definiciones.** En una corrida, la instrucción que le dio al analista
+definía "sin cobrar" como rechazados + en revisión + *reembolsados*, y el total dio 217.490,00 ARS.
+Un cobro reembolsado sí se cobró: después se devolvió. El analista hizo bien la cuenta que le
+pidieron; el error estaba en la instrucción. Agregué una regla al prompt del supervisor: no meter
+supuestos que el usuario no dio, y pedirle al especialista que use las definiciones de sus
+herramientas y diga cuál usó. En las corridas siguientes el total fue 58.490,00 ARS. Es el riesgo
+que el módulo marca para la topología jerárquica: si el supervisor se equivoca, el error se propaga a
+todos los demás.
+
+**"Qué porcentaje se rechazó" admite dos lecturas.** En una corrida el sistema contestó "20 %" (1
+cobro de 5) y en otra "18,45 % del monto total" (45.990 sobre 249.290 ARS). Las dos cuentas son
+correctas y la respuesta aclara cuál hizo, pero muestra que un pedido ambiguo da resultados
+distintos entre corridas. En un sistema real, el supervisor debería preguntar.
+
+**En las corridas reales nunca hizo falta corregir.** El supervisor aceptó el primer aporte de cada
+especialista en los dos pedidos. El camino de "devolver la tarea con una corrección" y el corte por
+`MAX_DELEGACIONES` están probados en los tests, con un supervisor guionado, pero no los vi pasar con
+el modelo real.
+
+**El notebook se colgó una vez.** Una ejecución quedó trabada más de 10 minutos en la celda del
+pedido y `nbclient` la cortó por timeout. La siguiente ejecución tardó menos de un minuto. No
+encontré la causa; por las dudas, el generador ahora corta cada celda a los 4 minutos.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_orquestador.py
+```
+
+Son 17 tests sin API keys. El supervisor es un modelo falso que devuelve un guion de `Decision`; los
+especialistas usan el modelo guionado de la pre-entrega 5 o nodos falsos. Cubren:
+
+- el estado: delegar sin instrucción, destinos inexistentes, aportes de un agente que no es
+  especialista;
+- el analista: parseo de montos, estadísticas con dos monedas, datos inválidos o repetidos, y la
+  calculadora (incluidas las expresiones peligrosas);
+- los especialistas: qué contexto reciben (ni el historial, ni sus propios aportes, ni los que
+  fallaron), un ciclo con herramienta y un modelo que falla sin romper el grafo;
+- el grafo: la estructura, el recorrido investigador → analista → síntesis, una corrección, el
+  corte por `MAX_DELEGACIONES` y un pedido que no necesita especialistas.
+
+Con los de las pre-entregas anteriores son 208:
+
+```bash
+python -m pytest -q
+```
+
+## Archivos
+
+```
+orquestador/
+  state.py                  EstadoOrquestador, Aporte, Decision
+  graph.py                  StateGraph, rutear (Literal), ejecutar() con la traza
+  agents/
+    especialista.py         create_react_agent envuelto en un nodo, con contexto acotado
+    research_agent.py       investigador: base de cobros y documentación
+    analyst_agent.py        analista: estadisticas_cobros y calcular
+    supervisor.py           supervisor (rúbrica + parada) y síntesis
+probar_orquestador.py       dos pedidos de prueba y la traza
+demo_orquestador.ipynb      demo del flujo de delegación, ejecutado
+evidencia/
+  traza_orquestador.json    decisiones y aportes de cada pedido
+  traza_orquestador.log     el mismo recorrido como log
+  salida_probar_orquestador.txt
+  grafo_orquestador.mmd     el diagrama en Mermaid
+  grafo_orquestador.png     el diagrama como imagen
+tests/test_orquestador.py   17 tests sin API keys
+```
 
 # Pre-entrega 5: agente ReAct con LangGraph y memoria en SQLite
 
