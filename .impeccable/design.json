@@ -1,0 +1,492 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-18T23:47:02+00:00",
+  "title": "Design System: Tambor · Libro de operaciones",
+  "extensions": {
+    "colorMeta": {
+      "sello": {
+        "role": "primary",
+        "displayName": "Violeta de sello",
+        "canonical": "#4b3b8f",
+        "tonalRamp": [
+          "oklch(15% 0.080 287.9)",
+          "oklch(27% 0.133 287.9)",
+          "oklch(39% 0.133 287.9)",
+          "oklch(51% 0.133 287.9)",
+          "oklch(63% 0.133 287.9)",
+          "oklch(75% 0.133 287.9)",
+          "oklch(85% 0.133 287.9)",
+          "oklch(95% 0.080 287.9)"
+        ]
+      },
+      "sello-hondo": {
+        "role": "primary",
+        "displayName": "Violeta hondo",
+        "canonical": "#3a2d70",
+        "tonalRamp": [
+          "oklch(15% 0.067 288.2)",
+          "oklch(27% 0.111 288.2)",
+          "oklch(39% 0.111 288.2)",
+          "oklch(51% 0.111 288.2)",
+          "oklch(63% 0.111 288.2)",
+          "oklch(75% 0.111 288.2)",
+          "oklch(85% 0.111 288.2)",
+          "oklch(95% 0.067 288.2)"
+        ]
+      },
+      "papel": {
+        "role": "neutral",
+        "displayName": "Papel",
+        "canonical": "#edf1e6",
+        "tonalRamp": [
+          "oklch(15% 0.009 123.0)",
+          "oklch(27% 0.015 123.0)",
+          "oklch(39% 0.015 123.0)",
+          "oklch(51% 0.015 123.0)",
+          "oklch(63% 0.015 123.0)",
+          "oklch(75% 0.015 123.0)",
+          "oklch(85% 0.015 123.0)",
+          "oklch(95% 0.009 123.0)"
+        ]
+      },
+      "papel-2": {
+        "role": "neutral",
+        "displayName": "Papel de libro",
+        "canonical": "#e2e8da",
+        "tonalRamp": [
+          "oklch(15% 0.012 125.8)",
+          "oklch(27% 0.020 125.8)",
+          "oklch(39% 0.020 125.8)",
+          "oklch(51% 0.020 125.8)",
+          "oklch(63% 0.020 125.8)",
+          "oklch(75% 0.020 125.8)",
+          "oklch(85% 0.020 125.8)",
+          "oklch(95% 0.012 125.8)"
+        ]
+      },
+      "hoja": {
+        "role": "neutral",
+        "displayName": "Hoja de comprobante",
+        "canonical": "#f8faf4",
+        "tonalRamp": [
+          "oklch(15% 0.005 121.6)",
+          "oklch(27% 0.008 121.6)",
+          "oklch(39% 0.008 121.6)",
+          "oklch(51% 0.008 121.6)",
+          "oklch(63% 0.008 121.6)",
+          "oklch(75% 0.008 121.6)",
+          "oklch(85% 0.008 121.6)",
+          "oklch(95% 0.005 121.6)"
+        ]
+      },
+      "tinta": {
+        "role": "neutral",
+        "displayName": "Tinta",
+        "canonical": "#1c2420",
+        "tonalRamp": [
+          "oklch(15% 0.008 163.6)",
+          "oklch(27% 0.014 163.6)",
+          "oklch(39% 0.014 163.6)",
+          "oklch(51% 0.014 163.6)",
+          "oklch(63% 0.014 163.6)",
+          "oklch(75% 0.014 163.6)",
+          "oklch(85% 0.014 163.6)",
+          "oklch(95% 0.008 163.6)"
+        ]
+      },
+      "tinta-2": {
+        "role": "neutral",
+        "displayName": "Tinta segunda",
+        "canonical": "#4a5650",
+        "tonalRamp": [
+          "oklch(15% 0.011 164.0)",
+          "oklch(27% 0.018 164.0)",
+          "oklch(39% 0.018 164.0)",
+          "oklch(51% 0.018 164.0)",
+          "oklch(63% 0.018 164.0)",
+          "oklch(75% 0.018 164.0)",
+          "oklch(85% 0.018 164.0)",
+          "oklch(95% 0.011 164.0)"
+        ]
+      },
+      "tinta-3": {
+        "role": "neutral",
+        "displayName": "Tinta gastada",
+        "canonical": "#5e6963",
+        "tonalRamp": [
+          "oklch(15% 0.010 162.0)",
+          "oklch(27% 0.016 162.0)",
+          "oklch(39% 0.016 162.0)",
+          "oklch(51% 0.016 162.0)",
+          "oklch(63% 0.016 162.0)",
+          "oklch(75% 0.016 162.0)",
+          "oklch(85% 0.016 162.0)",
+          "oklch(95% 0.010 162.0)"
+        ]
+      },
+      "renglon": {
+        "role": "neutral",
+        "displayName": "Renglón",
+        "canonical": "#b9cbd8",
+        "tonalRamp": [
+          "oklch(15% 0.016 239.1)",
+          "oklch(27% 0.027 239.1)",
+          "oklch(39% 0.027 239.1)",
+          "oklch(51% 0.027 239.1)",
+          "oklch(63% 0.027 239.1)",
+          "oklch(75% 0.027 239.1)",
+          "oklch(85% 0.027 239.1)",
+          "oklch(95% 0.016 239.1)"
+        ]
+      },
+      "renglon-fuerte": {
+        "role": "neutral",
+        "displayName": "Renglón fuerte",
+        "canonical": "#7f9db4",
+        "tonalRamp": [
+          "oklch(15% 0.029 241.4)",
+          "oklch(27% 0.048 241.4)",
+          "oklch(39% 0.048 241.4)",
+          "oklch(51% 0.048 241.4)",
+          "oklch(63% 0.048 241.4)",
+          "oklch(75% 0.048 241.4)",
+          "oklch(85% 0.048 241.4)",
+          "oklch(95% 0.029 241.4)"
+        ]
+      },
+      "regla": {
+        "role": "neutral",
+        "displayName": "Regla roja",
+        "canonical": "#c4524b",
+        "tonalRamp": [
+          "oklch(15% 0.089 26.2)",
+          "oklch(27% 0.148 26.2)",
+          "oklch(39% 0.148 26.2)",
+          "oklch(51% 0.148 26.2)",
+          "oklch(63% 0.148 26.2)",
+          "oklch(75% 0.148 26.2)",
+          "oklch(85% 0.148 26.2)",
+          "oklch(95% 0.089 26.2)"
+        ]
+      },
+      "azul": {
+        "role": "state",
+        "displayName": "Tinta azul (en curso)",
+        "canonical": "#2c5a85",
+        "tonalRamp": [
+          "oklch(15% 0.052 248.9)",
+          "oklch(27% 0.087 248.9)",
+          "oklch(39% 0.087 248.9)",
+          "oklch(51% 0.087 248.9)",
+          "oklch(63% 0.087 248.9)",
+          "oklch(75% 0.087 248.9)",
+          "oklch(85% 0.087 248.9)",
+          "oklch(95% 0.052 248.9)"
+        ]
+      },
+      "verde": {
+        "role": "state",
+        "displayName": "Tinta verde (resuelto)",
+        "canonical": "#2d6a4a",
+        "tonalRamp": [
+          "oklch(15% 0.050 158.0)",
+          "oklch(27% 0.083 158.0)",
+          "oklch(39% 0.083 158.0)",
+          "oklch(51% 0.083 158.0)",
+          "oklch(63% 0.083 158.0)",
+          "oklch(75% 0.083 158.0)",
+          "oklch(85% 0.083 158.0)",
+          "oklch(95% 0.050 158.0)"
+        ]
+      },
+      "rojo": {
+        "role": "state",
+        "displayName": "Tinta roja (falló)",
+        "canonical": "#b2332c",
+        "tonalRamp": [
+          "oklch(15% 0.099 27.7)",
+          "oklch(27% 0.165 27.7)",
+          "oklch(39% 0.165 27.7)",
+          "oklch(51% 0.165 27.7)",
+          "oklch(63% 0.165 27.7)",
+          "oklch(75% 0.165 27.7)",
+          "oklch(85% 0.165 27.7)",
+          "oklch(95% 0.099 27.7)"
+        ]
+      },
+      "gris": {
+        "role": "state",
+        "displayName": "Tinta gris (en cola)",
+        "canonical": "#5c655f",
+        "tonalRamp": [
+          "oklch(15% 0.009 156.7)",
+          "oklch(27% 0.015 156.7)",
+          "oklch(39% 0.015 156.7)",
+          "oklch(51% 0.015 156.7)",
+          "oklch(63% 0.015 156.7)",
+          "oklch(75% 0.015 156.7)",
+          "oklch(85% 0.015 156.7)",
+          "oklch(95% 0.009 156.7)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Nº de comprobante",
+        "purpose": "Solo el número del comprobante abierto; 34px por debajo de 960px."
+      },
+      "headline": {
+        "displayName": "Título de documento",
+        "purpose": "Nueva orden, estado vacío y bloque de firma (20–24px)."
+      },
+      "title": {
+        "displayName": "Apartado",
+        "purpose": "Secciones del comprobante: Respuesta, Recorrido, Reembolso."
+      },
+      "body": {
+        "displayName": "Texto",
+        "purpose": "Texto corriente; prosa de la respuesta a 72ch."
+      },
+      "label": {
+        "displayName": "Etiqueta",
+        "purpose": "Etiquetas de campo y avisos."
+      },
+      "label-condensed": {
+        "displayName": "Rótulo condensado",
+        "purpose": "Rótulos de columna y de dato, nombre del agente (11.5–13px, ancho 80)."
+      },
+      "stamp": {
+        "displayName": "Sello",
+        "purpose": "Texto en mayúsculas de los sellos de estado; 15px en el sello grande."
+      },
+      "mono": {
+        "displayName": "Máquina de numerar",
+        "purpose": "Números de asiento, IDs, horas, duraciones, contador, herramientas."
+      }
+    },
+    "shadows": [
+      {
+        "name": "hoja-apoyada",
+        "value": "0 1px 0 rgba(28, 36, 32, 0.04), 0 12px 28px -18px rgba(44, 70, 58, 0.35)",
+        "purpose": "Solo el comprobante abierto: la única hoja levantada del papel."
+      },
+      {
+        "name": "aviso-flotante",
+        "value": "0 10px 24px -12px rgba(28, 36, 32, 0.6)",
+        "purpose": "Solo el toast transitorio."
+      },
+      {
+        "name": "filete-de-foco",
+        "value": "0 0 0 1px #4b3b8f",
+        "purpose": "Campos en foco, sumado al borde violeta."
+      }
+    ],
+    "focus": {
+      "value": "outline: 2px solid #4b3b8f; outline-offset: 2px",
+      "purpose": "Foco visible de todo control que no es campo de texto."
+    },
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Curva de toda entrada y presión."
+      },
+      {
+        "name": "presion",
+        "value": "transform: scale(0.97), 140ms ease-out",
+        "purpose": "Botón presionado."
+      },
+      {
+        "name": "cambio-de-color",
+        "value": "160ms ease",
+        "purpose": "Hover de botones, chips, filas y borde de campos."
+      },
+      {
+        "name": "estampar",
+        "value": "260ms ease-out: rotate(-9deg) scale(1.7) blur(3px) a rotate(-4deg) scale(1)",
+        "purpose": "El sello grande al cambiar de estado."
+      },
+      {
+        "name": "asentar",
+        "value": "260ms ease-out: translateY(-6px) y opacidad 0 a reposo",
+        "purpose": "Fila nueva en el libro."
+      },
+      {
+        "name": "abrir",
+        "value": "200ms ease-out: translateY(4px) y blur(2px) a reposo",
+        "purpose": "Comprobante al abrirse."
+      },
+      {
+        "name": "correr",
+        "value": "700ms linear infinite",
+        "purpose": "Trazo discontinuo del sello En curso."
+      },
+      {
+        "name": "brillo",
+        "value": "1.4s linear infinite",
+        "purpose": "Esqueleto de carga mientras el worker trabaja."
+      },
+      {
+        "name": "movimiento-reducido",
+        "value": "animaciones a 1ms; el estampado pasa a un fundido de 160ms",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "una-columna",
+        "value": "960px"
+      },
+      {
+        "name": "telefono",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón de sello",
+      "kind": "button",
+      "refersTo": "button-sello",
+      "description": "Acción primaria: Encolar, Aprobar y firmar.",
+      "html": "<button class=\"ds-boton-sello\"><span>Encolar</span><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" aria-hidden=\"true\"><path d=\"M4 12h15M13 6l6 6-6 6\"/></svg></button>",
+      "css": ".ds-boton-sello { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 0; background: var(--sello, #4b3b8f); color: var(--hoja, #f8faf4); font-weight: 650; font-size: 14px; letter-spacing: 0.01em; cursor: pointer; transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease; } .ds-boton-sello:hover { background: var(--sello-hondo, #3a2d70); } .ds-boton-sello:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-boton-sello:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Botón Rechazar",
+      "kind": "button",
+      "refersTo": "button-rojo",
+      "description": "Rechazo de una firma: filete rojo, sin relleno.",
+      "html": "<button class=\"ds-boton-rojo\">Rechazar</button>",
+      "css": ".ds-boton-rojo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; height: 40px; padding: 0 16px; border: 0; border-radius: 0; background: transparent; color: var(--rojo, #b2332c); box-shadow: inset 0 0 0 1px var(--rojo, #b2332c); font-weight: 650; font-size: 14px; letter-spacing: 0.01em; cursor: pointer; transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease; } .ds-boton-rojo:hover { background: rgba(178, 51, 44, 0.06); } .ds-boton-rojo:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-boton-rojo:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Campo",
+      "kind": "input",
+      "refersTo": "input-campo",
+      "description": "Campo de una línea: hoja, borde de renglón fuerte, foco violeta.",
+      "html": "<label class=\"ds-campo\"><span>Quién firma</span><input placeholder=\"Tu nombre\"></label>",
+      "css": ".ds-campo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; } .ds-campo span { font-size: 13px; font-weight: 600; color: var(--tinta-2, #4a5650); } .ds-campo input { font: inherit; font-size: 14.5px; height: 40px; padding: 0 12px; border: 1px solid var(--renglon-fuerte, #7f9db4); border-radius: 0; background: var(--hoja, #f8faf4); color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-campo input::placeholder { color: var(--tinta-3, #5e6963); } .ds-campo input:hover { border-color: var(--tinta-3, #5e6963); } .ds-campo input:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
+    },
+    {
+      "name": "Área de texto con renglones",
+      "kind": "input",
+      "refersTo": "textarea-boleta",
+      "description": "El pedido se escribe sobre renglones de libro contable de 28px.",
+      "html": "<textarea class=\"ds-boleta-texto\" rows=\"4\" placeholder=\"Ej.: Analizá los últimos 5 cobros de Ferretería López\"></textarea>",
+      "css": ".ds-boleta-texto { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: block; width: 100%; min-height: 114px; padding: 0 12px; resize: vertical; border: 1px solid var(--renglon-fuerte, #7f9db4); border-radius: 0; background-color: var(--hoja, #f8faf4); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 27px, var(--renglon, #b9cbd8) 27px, var(--renglon, #b9cbd8) 28px); background-attachment: local; line-height: 28px; font-size: 15px; color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-boleta-texto::placeholder { color: var(--tinta-3, #5e6963); } .ds-boleta-texto:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
+    },
+    {
+      "name": "Chip de pedido de ejemplo",
+      "kind": "chip",
+      "refersTo": "chip-ejemplo",
+      "description": "Atajo que completa el pedido; borde discontinuo que se vuelve continuo.",
+      "html": "<div class=\"ds-ejemplos\"><button class=\"ds-ejemplo\">Rechazos de Ferretería López</button><button class=\"ds-ejemplo ds-ejemplo--firma\">Reembolso con firma</button></div>",
+      "css": ".ds-ejemplos { display: flex; flex-wrap: wrap; gap: 8px; } .ds-ejemplo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; padding: 3px 8px; border: 1px dashed var(--renglon-fuerte, #7f9db4); border-radius: 0; background: transparent; font-size: 12.5px; color: var(--tinta-2, #4a5650); cursor: pointer; transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease; } .ds-ejemplo:hover { border-style: solid; color: var(--tinta, #1c2420); background: var(--hoja, #f8faf4); } .ds-ejemplo:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-ejemplo--firma { border-color: var(--sello, #4b3b8f); color: var(--sello, #4b3b8f); } .ds-ejemplo--firma:hover { color: var(--sello-hondo, #3a2d70); }"
+    },
+    {
+      "name": "Sellos de estado",
+      "kind": "custom",
+      "refersTo": "sello-en-cola",
+      "description": "Los cinco estados como sellos de goma de doble borde; solo Espera firma va relleno.",
+      "html": "<div class=\"ds-sellos\"><span class=\"ds-sello\" data-estado=\"PENDING\">En cola</span><span class=\"ds-sello\" data-estado=\"RUNNING\">En curso</span><span class=\"ds-sello\" data-estado=\"WAITING_APPROVAL\">Espera firma</span><span class=\"ds-sello\" data-estado=\"DONE\">Resuelto</span><span class=\"ds-sello\" data-estado=\"FAILED\">Falló</span></div>",
+      "css": ".ds-sellos { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px; } .ds-sello { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; --t: var(--gris, #5c655f); display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; border: 1.5px solid var(--t); outline: 1px solid var(--t); outline-offset: 1.5px; color: var(--t); font-size: 10.5px; font-weight: 700; font-variation-settings: 'wdth' 85; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; transform: rotate(-2deg); } .ds-sello[data-estado=RUNNING] { --t: var(--azul, #2c5a85); } .ds-sello[data-estado=WAITING_APPROVAL] { --t: var(--sello, #4b3b8f); background: var(--sello, #4b3b8f); color: var(--hoja, #f8faf4); } .ds-sello[data-estado=DONE] { --t: var(--verde, #2d6a4a); } .ds-sello[data-estado=FAILED] { --t: var(--rojo, #b2332c); } .ds-sello[data-estado=RUNNING]::after { content: ''; width: 14px; height: 2px; background: linear-gradient(90deg, var(--azul, #2c5a85) 0 40%, transparent 40% 100%) 0 0 / 7px 2px repeat-x; animation: ds-correr 700ms linear infinite; } @keyframes ds-correr { to { background-position: 7px 0; } } @media (prefers-reduced-motion: reduce) { .ds-sello::after { animation: none; } }"
+    },
+    {
+      "name": "Fila del libro de asientos",
+      "kind": "custom",
+      "refersTo": "fila-libro",
+      "description": "Asiento numerado con margen rojo doble y sello derecho.",
+      "html": "<ol class=\"ds-libro\"><li><button class=\"ds-fila\" aria-current=\"true\"><span class=\"ds-fila__nro\">0008</span><span class=\"ds-fila__texto\"><span class=\"ds-fila__pedido\">Reembolsá los cobros cob_7E8Q4 y cob_7F3K2</span><span class=\"ds-fila__meta\">20:29:54 · 1 min 23 s</span></span><span class=\"ds-fila__sello\">Resuelto</span></button></li><li><button class=\"ds-fila\"><span class=\"ds-fila__nro\">0007</span><span class=\"ds-fila__texto\"><span class=\"ds-fila__pedido\">¿Qué cobros de Farmacia López Hermanos fallaron?</span><span class=\"ds-fila__meta\">19:59:53 · 18 s</span></span><span class=\"ds-fila__sello\">Resuelto</span></button></li></ol>",
+      "css": ".ds-libro { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--renglon-fuerte, #7f9db4); background: var(--papel, #edf1e6); } .ds-fila { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; width: 100%; min-height: 52px; padding: 8px 24px; border: 0; border-bottom: 1px solid var(--renglon, #b9cbd8); background: transparent; color: var(--tinta, #1c2420); text-align: left; cursor: pointer; transition: background-color 160ms ease; } .ds-fila::before { content: ''; position: absolute; top: 0; bottom: 0; left: 69px; width: 4px; border-left: 1px solid var(--regla, #c4524b); border-right: 1px solid var(--regla, #c4524b); opacity: 0.55; } .ds-fila:hover { background: rgba(248, 250, 244, 0.6); } .ds-fila:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-fila[aria-current=true] { background: var(--hoja, #f8faf4); } .ds-fila[aria-current=true] .ds-fila__nro { color: var(--sello, #4b3b8f); font-weight: 600; } .ds-fila__nro { font: 12.5px 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: var(--tinta-2, #4a5650); } .ds-fila__texto { min-width: 0; padding-left: 12px; display: flex; flex-direction: column; gap: 1px; } .ds-fila__pedido { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; } .ds-fila__meta { font: 11.5px 'JetBrains Mono', ui-monospace, monospace; color: var(--tinta-3, #5e6963); } .ds-fila__sello { padding: 2px 7px; border: 1.5px solid var(--verde, #2d6a4a); outline: 1px solid var(--verde, #2d6a4a); outline-offset: 1.5px; color: var(--verde, #2d6a4a); font-size: 10.5px; font-weight: 700; font-variation-settings: 'wdth' 85; letter-spacing: 0.06em; text-transform: uppercase; }"
+    },
+    {
+      "name": "Bloque de firma",
+      "kind": "card",
+      "refersTo": "firma",
+      "description": "Aprobación humana de un reembolso: doble borde violeta y velo de sello.",
+      "html": "<section class=\"ds-firma\"><h3>Hace falta tu firma</h3><p>¿Aprobás reembolsar estos cobros?</p><ul><li>cob_7E8Q4</li><li>cob_7F3K2</li></ul></section>",
+      "css": ".ds-firma { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; border: 1.5px solid var(--sello, #4b3b8f); outline: 1px solid var(--sello, #4b3b8f); outline-offset: 3px; border-radius: 0; padding: 24px; background: rgba(75, 59, 143, 0.08); color: var(--tinta, #1c2420); } .ds-firma h3 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.015em; color: var(--sello-hondo, #3a2d70); } .ds-firma p { margin: 8px 0 0; font-size: 15px; } .ds-firma ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; } .ds-firma li { font: 13px 'JetBrains Mono', ui-monospace, monospace; padding: 3px 8px; background: var(--hoja, #f8faf4); border: 1px solid var(--sello, #4b3b8f); }"
+    },
+    {
+      "name": "Barra",
+      "kind": "nav",
+      "refersTo": "barra",
+      "description": "Barra fija de 56px: sello de marca, salud de la API y enlace a Phoenix.",
+      "html": "<header class=\"ds-barra\"><div class=\"ds-marca\"><span class=\"ds-marca__sello\">T</span><b>Tambor</b><span class=\"ds-marca__libro\">Libro de operaciones</span></div><div class=\"ds-barra__lado\"><span class=\"ds-salud\"><i></i>API y Redis en línea</span><a href=\"#\">Trazas en Phoenix</a></div></header>",
+      "css": ".ds-barra { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 24px; background: var(--papel-2, #e2e8da); border-bottom: 1px solid var(--renglon-fuerte, #7f9db4); color: var(--tinta, #1c2420); } .ds-marca { display: flex; align-items: center; gap: 12px; } .ds-marca__sello { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--sello, #4b3b8f); outline: 1px solid var(--sello, #4b3b8f); outline-offset: 2px; color: var(--sello, #4b3b8f); font-weight: 800; font-size: 14px; transform: rotate(-4deg); } .ds-marca b { font-weight: 750; font-size: 18px; letter-spacing: -0.01em; } .ds-marca__libro { color: var(--tinta-2, #4a5650); font-variation-settings: 'wdth' 75; font-weight: 500; font-size: 14px; } .ds-barra__lado { display: flex; align-items: center; gap: 24px; font-size: 13px; } .ds-salud { display: inline-flex; align-items: center; gap: 8px; color: var(--tinta-2, #4a5650); } .ds-salud i { width: 8px; height: 8px; border-radius: 50%; background: var(--verde, #2d6a4a); } .ds-barra a { color: var(--azul, #2c5a85); font-weight: 600; text-underline-offset: 3px; text-decoration-thickness: 1px; } .ds-barra a:hover { text-decoration-thickness: 2px; } .ds-barra a:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El libro de operaciones y el sello",
+    "overview": "La consola es el libro de un back office de cobros. Cada pedido a la API es un comprobante numerado que se asienta en un libro de renglones azules y recibe sellos de goma a medida que cambia de estado. El papel es contable, verde pálido; la tinta es verde-negra; y hay una sola tinta de acento, el violeta de los sellos, que marca lo que pide una mano humana: encolar, firmar, decidir.\n\nLa densidad es la de una planilla de oficina, no la de un panel de marketing: líneas de 1px en lugar de tarjetas, números en monoespaciada tabular, encabezados en Archivo condensado. La jerarquía la dan el ancho de la letra, el peso y las reglas (renglón azul, doble regla roja de margen), no los fondos de color ni las sombras. La única hoja que se levanta del papel es el comprobante abierto.\n\nRechazos confirmados por el contrato de dirección: el panel SaaS de tarjetas redondeadas y el chat de burbujas. La respuesta del sistema se lee como un asiento, no como un mensaje.",
+    "keyCharacteristics": [
+      "Papel verde pálido en tres capas (papel, papel-2, hoja) y tinta verde-negra en tres intensidades.",
+      "Una sola tinta de acento: violeta de sello, reservada a la acción y a la firma.",
+      "Estados como sellos de goma de doble borde, cada uno con su tinta, nunca como badges redondeados.",
+      "Cero radios en toda superficie y control.",
+      "Archivo variable en anchos condensados para rótulos; JetBrains Mono tabular para todo lo que es número o ID.",
+      "Doble regla roja que separa la cabeza del cuerpo de cada documento."
+    ],
+    "rules": [
+      {
+        "name": "La Regla de la Tinta Única",
+        "body": "El violeta de sello es el único acento. Aparece donde hay una acción o una decisión humana, y en ningún otro lugar. Si una pantalla nueva necesita \"un color para destacar\", la respuesta es peso o ancho tipográfico, no otra tinta.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla de una Tinta por Estado",
+        "body": "Cada estado tiene una tinta fija (gris en cola, azul en curso, violeta espera firma, verde resuelto, rojo falló) y esa tinta colorea borde, doble borde y texto del sello. Solo \"Espera firma\" va relleno, porque es el único estado que le pide algo a la persona.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla de la Regla Roja",
+        "body": "El rojo de margen (#c4524b) y el rojo de error (#b2332c) son tintas distintas. La regla es papelería: separa cabeza de cuerpo. El rojo de error es un dato. No se intercambian.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla del Número a Máquina",
+        "body": "Todo número o identificador (Nº de asiento, `cob_XXXXX`, horas, duraciones, contadores) va en JetBrains Mono con cifras tabulares. La única excepción es el Nº grande del comprobante, que va en Archivo condensado con `tnum`, porque es el titular del documento.",
+        "section": "typography"
+      },
+      {
+        "name": "La Regla del Ancho Condensado",
+        "body": "Los rótulos se condensan (ancho 72–85); el texto que se lee de corrido nunca. Si algo es una etiqueta de columna o de sello, se angosta; si es una oración, va en ancho 100.",
+        "section": "typography"
+      },
+      {
+        "name": "La Regla de la Hoja Única",
+        "body": "Una sola cosa por pantalla se levanta del papel: el documento que se está leyendo. Filas, campos, boleta, firma y sellos quedan planos y se separan con líneas.",
+        "section": "elevation"
+      },
+      {
+        "name": "La Regla del Cero Radio",
+        "body": "Nada de papel tiene esquinas redondeadas. Si un componente nuevo necesita suavidad, se resuelve con espacio o con tinta más clara, nunca con `border-radius`.",
+        "section": "shapes"
+      },
+      {
+        "name": "La Regla del Sello Derecho en Columna",
+        "body": "Un sello solo se gira cuando está solo. Ocho sellos girados iguales en una lista se leen como patrón decorativo; en el libro van rectos.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** reservar el violeta de sello (#4b3b8f) para acciones y decisiones humanas: botón primario, firma, estado Espera firma, foco.",
+      "**Do** mostrar todo estado de trabajo como sello de doble borde con la tinta de su estado, y rellenar solo \"Espera firma\".",
+      "**Do** escribir números, IDs, horas y duraciones en JetBrains Mono con cifras tabulares.",
+      "**Do** separar la cabeza de un documento de su cuerpo con la doble regla roja de 3px.",
+      "**Do** dividir listas con líneas de 1px en renglón (#b9cbd8) en lugar de cajas o fondos alternados.",
+      "**Do** condensar los rótulos con el eje de ancho de Archivo (72–85) y dejar la prosa en ancho 100.",
+      "**Do** limitar el hover a dispositivos con puntero fino y reducir toda animación a un fundido cuando el usuario pide menos movimiento."
+    ],
+    "donts": [
+      "**Don't** redondear esquinas de superficies, campos, botones, chips ni sellos (radio 0); la luz de salud es el único círculo.",
+      "**Don't** convertir los estados de un trabajo en badges tipo píldora ni en puntos de color sueltos (el punto es solo para la salud de la API).",
+      "**Don't** sumar una segunda tinta de acento ni usar el violeta como decoración.",
+      "**Don't** levantar con sombra nada que no sea el comprobante abierto o el aviso flotante.",
+      "**Don't** girar sellos que están en una columna o lista.",
+      "**Don't** usar el rojo de la regla (#c4524b) para texto ni el rojo de error (#b2332c) para reglas.",
+      "**Don't** presentar la respuesta del sistema como burbuja de chat ni como grilla de tarjetas: se lee como asiento en un comprobante."
+    ]
+  }
+}

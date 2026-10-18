@@ -24,3 +24,7 @@ memoria_agente.sqlite*
 
 # Archivos de la herramienta de capturas (Playwright)
 .playwright-mcp/
+
+# Local: configuración de Claude Code y capturas de revisión de diseño
+.claude/
+.impeccable/review/

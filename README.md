@@ -106,7 +106,8 @@ funciona igual: solo se pierden las trazas.
 uvicorn app.main:app --port 8000
 ```
 
-La documentación interactiva queda en http://localhost:8000/docs. Con la API corriendo, en otra
+La consola web queda en http://localhost:8000/ (ver [Consola web](#consola-web)) y la documentación
+interactiva en http://localhost:8000/docs. Para probarla por línea de comandos, con la API corriendo, en otra
 terminal:
 
 ```bash
@@ -214,6 +215,38 @@ como un span, sin decorar función por función. Encima de eso:
 | [`03_sesiones_por_job.png`](screenshots/03_sesiones_por_job.png) | Una sesión por `job_id` |
 | [`04_sesion_aprobacion_humana.png`](screenshots/04_sesion_aprobacion_humana.png) | El reembolso aprobado: turno 1 hasta `WAITING_APPROVAL` (32,9 s, $0,06), turno 2 con la aprobación (1,7 s, sin llamar al modelo) |
 
+## Consola web
+
+`GET /` sirve una consola para usar la API sin `curl`: `app/static/`, HTML, CSS y JavaScript sin
+framework ni build, servidos por el mismo FastAPI.
+
+![La consola con un reembolso firmado](screenshots/05_consola.png)
+
+- **Nueva orden:** se escribe el pedido (o se elige uno de ejemplo) y se encola con el botón o
+  `Ctrl+Enter`. La API devuelve el número enseguida; el trabajo corre en segundo plano.
+- **Asientos:** cada pedido queda anotado con su número y su estado. La API no tiene un endpoint
+  para listar trabajos, así que la lista (solo IDs y número) vive en el `localStorage` del navegador.
+- **El comprobante:** consulta `GET /tasks/{id}` cada 1,5 s mientras el trabajo corre (cada 8 s si
+  espera firma, y nada si la pestaña está oculta). Muestra la respuesta en Markdown, el recorrido
+  (qué decidió el supervisor y qué hizo cada especialista, con sus herramientas) y el ID de la
+  sesión en Phoenix.
+- **La firma:** cuando un reembolso queda en `WAITING_APPROVAL`, la consola muestra primero el
+  análisis de los agentes y los cobros, y después el formulario con el nombre de quien firma.
+  "Aprobar" y "Rechazar" llaman a `POST /tasks/{id}/approve`; un `409` (otra firma llegó antes) se
+  muestra y se vuelve a consultar el estado.
+
+El diseño sigue la idea de un libro de operaciones de back office: papel contable con renglones,
+números en monoespaciada y los estados como sellos de goma que se "estampan" cuando cambian. Las
+animaciones duran menos de 300 ms, mueven solo `transform` y `opacity`, y se apagan con
+`prefers-reduced-motion`. Funciona en el celular: las columnas se apilan y al tocar un asiento la
+página baja al comprobante.
+
+| Captura | Qué muestra |
+|---|---|
+| [`05_consola.png`](screenshots/05_consola.png) | Un reembolso firmado: `cob_7E8Q4` ya tenía reembolso y no se duplica, `cob_7F3K2` está rechazado y no se reembolsa |
+| [`06_consola_mobile.png`](screenshots/06_consola_mobile.png) | El mismo comprobante a 375 px |
+| [`07_consola_vacia.png`](screenshots/07_consola_vacia.png) | El primer uso: qué pasa con un pedido, de la cola a la firma |
+
 ## Resultados
 
 Contra Redis Cloud, Phoenix local y `claude-haiku-4-5`.
@@ -290,7 +323,7 @@ con los workers corriendo. Cubren:
 
 - la detección de reembolsos (con y sin verbo, con y sin IDs);
 - el flujo normal: `202`, `PENDING` y después `DONE` con el resultado;
-- validación (`422`) y `404`;
+- validación (`422`) y `404`, y que `/` sirve la consola;
 - `FAILED` cuando falla un nodo y cuando falla algo después del grafo, con el worker vivo después;
 - la aprobación: se detiene, no ejecuta nada antes de aprobar, la segunda aprobación da `409`, solo
   reembolsa el cobro aprobado, y el rechazo no ejecuta nada;
@@ -306,16 +339,17 @@ python -m pytest -q
 
 ```
 app/
-  main.py                   FastAPI: POST /tasks, GET /tasks/{id}, /health; levanta los workers
+  main.py                   FastAPI: POST /tasks, GET /tasks/{id}, /health, la consola en /; levanta los workers
   graph.py                  el orquestador del M6 + aprobación + reembolso; serializador de Redis
   worker.py                 toma trabajos de la cola, corre el grafo, PENDING/RUNNING/DONE/FAILED
   jobs.py                   estado de los trabajos y cola en Redis
   hitl.py                   qué es crítico, nodo con interrupt(), reembolso y POST /approve
   observability.py          Phoenix + OpenInference
+  static/                   la consola web: index.html, consola.css, consola.js
 probar_api.py               5 pedidos concurrentes y el flujo de aprobación
 docker-compose.yml          API + Redis 8 + Phoenix (sin probar)
 Dockerfile
-screenshots/                capturas del panel de Phoenix
+screenshots/                capturas de Phoenix (01-04) y de la consola (05-07)
 evidencia/
   salida_carga_api.txt      la prueba de carga
   carga_api.json            lo mismo, con las respuestas

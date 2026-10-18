@@ -4,6 +4,7 @@
     GET  /tasks/{id}            estado del trabajo: PENDING, RUNNING, WAITING_APPROVAL, DONE o FAILED
     POST /tasks/{id}/approve    aprueba o rechaza el reembolso que espera revisión (app/hitl.py)
     GET  /health                ping a Redis
+    GET  /                      la consola web (app/static/)
 
 Levantar:
 
@@ -19,9 +20,12 @@ import os
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
@@ -31,6 +35,8 @@ from .observability import cerrar_trazas, iniciar_trazas
 from .worker import correr_worker
 
 logger = logging.getLogger(__name__)
+
+ESTATICOS = Path(__file__).parent / "static"
 
 
 class Pedido(BaseModel):
@@ -105,6 +111,12 @@ def crear_app(
         telemetry={"exclude": lambda scope: scope.get("method") == "GET"},
     )
     app.include_router(router_hitl)
+    app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
+
+    @app.get("/", include_in_schema=False)
+    async def consola() -> FileResponse:
+        """La consola web: encolar pedidos, seguirlos en vivo y firmar reembolsos."""
+        return FileResponse(ESTATICOS / "index.html")
 
     @app.post("/tasks", status_code=status.HTTP_202_ACCEPTED)
     async def crear_tarea(pedido: Pedido, request: Request) -> Job:

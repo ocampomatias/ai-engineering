@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tambor · Libro de operaciones</title>
+  <meta name="description" content="Consola de la API del orquestador multi-agente de Tambor: encolar pedidos, seguir su estado y firmar reembolsos.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23edf1e6'/%3E%3Crect x='4' y='4' width='24' height='24' fill='none' stroke='%234b3b8f' stroke-width='3'/%3E%3Ctext x='16' y='22' font-family='Arial' font-weight='700' font-size='15' text-anchor='middle' fill='%234b3b8f'%3ET%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="/static/consola.css">
+</head>
+<body>
+<!--
+THESIS: la cola de trabajos como el libro de operaciones de un back office de cobros. Cada pedido es un comprobante numerado que se asienta en el libro y recibe sellos de estado; rechaza el panel SaaS de tarjetas y el chat.
+OWN-WORLD: papel contable verde pálido con renglones azules y doble regla roja de margen, tinta verde-negra, una sola tinta de acento violeta de sello. Archivo en anchos condensados para encabezados de columna, JetBrains Mono para números e IDs. Cero radios; estados como sellos de goma de doble borde.
+STORY: el corrector entiende que un pedido se encola, lo ve pasar de EN COLA a EN CURSO, lee quién trabajó y qué decidió el supervisor, y firma o rechaza el reembolso.
+FIRST VIEWPORT: barra de 56px con marca, salud de la API y enlace a Phoenix. Izquierda 400px: boleta "Nueva orden" con renglones y el botón Encolar; debajo el libro de asientos. Derecha: el comprobante abierto, Nº grande, sello de estado arriba a la derecha.
+FORM: libro de operaciones y sello, candidato 3 de 7, seed 5c5d7803.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+-->
+  <header class="barra">
+    <div class="marca">
+      <span class="marca__sello" aria-hidden="true">T</span>
+      <span class="marca__nombre">Tambor</span>
+      <span class="marca__libro">Libro de operaciones</span>
+    </div>
+    <div class="barra__lado">
+      <span class="salud" id="salud" data-estado="pendiente" role="status" aria-live="polite">
+        <span class="salud__luz" aria-hidden="true"></span>
+        <span class="salud__texto">Conectando con la API</span>
+      </span>
+      <a class="enlace-externo" href="http://localhost:6006" target="_blank" rel="noopener" aria-label="Trazas en Phoenix (abre otra pestaña)">
+        <span><span class="enlace-externo__pre">Trazas en </span>Phoenix</span> <i class="ph ph-arrow-up-right" aria-hidden="true"></i>
+      </a>
+    </div>
+  </header>
+
+  <div class="mesa">
+    <aside class="columna">
+      <form class="boleta" id="boleta" novalidate>
+        <div class="boleta__cabeza">
+          <h1 class="boleta__titulo">Nueva orden</h1>
+          <span class="boleta__nro" id="proximo-nro">Nº 0001</span>
+        </div>
+        <label class="campo__etiqueta" for="pedido">Pedido al equipo de agentes</label>
+        <textarea class="boleta__texto" id="pedido" name="pedido" rows="4" minlength="5" maxlength="2000" required
+          placeholder="Ej.: Analizá los últimos 5 cobros de Ferretería López"></textarea>
+        <p class="campo__error" id="pedido-error" role="alert" hidden></p>
+        <div class="ejemplos" role="group" aria-label="Pedidos de ejemplo">
+          <button type="button" class="ejemplo" data-pedido="Analizá los últimos 5 cobros de Ferretería López: qué porcentaje se rechazó y qué tiene que hacer el comercio con cada código de error.">Rechazos de Ferretería López</button>
+          <button type="button" class="ejemplo" data-pedido="Compará la tasa de rechazo de Librería Andina y Café del Puerto. ¿Cuál está peor y por qué?">Andina contra Café del Puerto</button>
+          <button type="button" class="ejemplo ejemplo--firma" data-pedido="Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.">Reembolso con firma</button>
+        </div>
+        <div class="boleta__pie">
+          <span class="boleta__ayuda" id="contador">0 / 2000</span>
+          <button class="boton boton--sello" type="submit" id="encolar">
+            <span class="boton__texto">Encolar</span>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      </form>
+
+      <section class="libro" aria-labelledby="libro-titulo">
+        <div class="libro__cabeza">
+          <h2 class="libro__titulo" id="libro-titulo">Asientos</h2>
+          <button type="button" class="boton-texto" id="limpiar" hidden>Limpiar libro</button>
+        </div>
+        <ol class="libro__filas" id="filas"></ol>
+        <p class="libro__vacio" id="libro-vacio">Todavía no hay asientos. Cada pedido que encoles queda anotado acá con su número.</p>
+      </section>
+    </aside>
+
+    <main class="hoja" id="hoja" tabindex="-1"></main>
+  </div>
+
+  <template id="tpl-vacio">
+    <article class="comprobante comprobante--vacio">
+      <h2 class="vacio__titulo">Ningún comprobante abierto</h2>
+      <p class="vacio__texto">Un pedido no se responde al instante: entra a una cola en Redis, lo toma un worker y pasa por un supervisor y dos especialistas. Si pide reembolsar cobros, se frena hasta que alguien firme.</p>
+      <ol class="vacio__pasos">
+        <li><span class="sello" data-estado="PENDING">En cola</span><span>La API lo guarda y devuelve el número enseguida.</span></li>
+        <li><span class="sello" data-estado="RUNNING">En curso</span><span>Un worker corre el grafo: supervisor, investigador, analista.</span></li>
+        <li><span class="sello" data-estado="WAITING_APPROVAL">Espera firma</span><span>Solo los reembolsos. Nada se ejecuta sin tu aprobación.</span></li>
+        <li><span class="sello" data-estado="DONE">Resuelto</span><span>La respuesta, el recorrido y la traza en Phoenix.</span></li>
+      </ol>
+    </article>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <script src="/static/consola.js" defer></script>
+</body>
+</html>

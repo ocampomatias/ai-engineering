@@ -119,6 +119,9 @@ async def test_validacion_y_404(redis: FakeAsyncRedis) -> None:
         assert (await http.post("/tasks", json={"pedido": "x"})).status_code == 422
         assert (await http.get("/tasks/no-existe")).status_code == 404
         assert (await http.get("/health")).json() == {"estado": "ok"}
+        consola = await http.get("/")
+        assert consola.status_code == 200 and "Libro de operaciones" in consola.text
+        assert (await http.get("/static/consola.js")).status_code == 200
         aprobar = {"aprobado": True, "revisor": "ana"}
         assert (await http.post("/tasks/no-existe/approve", json=aprobar)).status_code == 404
 
