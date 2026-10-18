@@ -1,0 +1,32 @@
+Pedido encolado: bc205b4ec92d4176b6b597cb9d9f40a8
+  Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.
+
+ESPERA APROBACIÓN: ¿Aprobás reembolsar cob_7E8Q4, cob_7F3K2?
+
+Análisis de los agentes:
+**RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS**
+
+---
+
+**Re: Solicitud de reembolso - Ferretería López**
+
+Confirmamos el estado y monto de los cobros solicitados:
+
+| Cobro | Estado | Monto | Resultado |
+|-------|--------|-------|-----------|
+| **cob_7E8Q4** | Aprobado | 8.700,00 ARS | ✅ Elegible para reembolso |
+| **cob_7F3K2** | Rechazado | 45.990,00 ARS | ❌ No procede reembolso |
+
+**Detalles:**
+
+- **cob_7E8Q4 (Transferencia):** Cobro procesado correctamente. Procede reembolso estándar.
+
+- **cob_7F3K2 (Tarjeta de crédito):** Este cobro fue rechazado en origen (código de error **TMB-2031**, tras 3 intentos). Como los fondos nunca se transfirieron a Ferretería López, no hay dinero que devolver. Se recomienda investigar la causa del rechazo con el cliente antes de cualquier otra acción.
+
+Podemos proceder con el reembolso de **cob_7E8Q4**. Para **cob_7F3K2**, requerimos información adicional del comercio sobre si desea reintentar el cobro o si necesita auditoría del error.
+
+POST /approve True -> 202
+
+DONE. Resultado de la acción:
+cob_7E8Q4: reembolso de 8.700,00 ARS registrado.
+cob_7F3K2: está rechazado; solo se reembolsan cobros aprobados.

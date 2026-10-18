@@ -1,0 +1,84 @@
+{
+  "en_espera": {
+    "id": "bc205b4ec92d4176b6b597cb9d9f40a8",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "WAITING_APPROVAL",
+    "creado": "2026-10-18T22:57:58.984421Z",
+    "actualizado": "2026-10-18T22:58:32.699607Z",
+    "aprobacion": {
+      "accion": {
+        "tipo": "reembolso",
+        "cobro_ids": [
+          "cob_7E8Q4",
+          "cob_7F3K2"
+        ]
+      },
+      "analisis": "**RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS**\n\n---\n\n**Re: Solicitud de reembolso - Ferretería López**\n\nConfirmamos el estado y monto de los cobros solicitados:\n\n| Cobro | Estado | Monto | Resultado |\n|-------|--------|-------|-----------|\n| **cob_7E8Q4** | Aprobado | 8.700,00 ARS | ✅ Elegible para reembolso |\n| **cob_7F3K2** | Rechazado | 45.990,00 ARS | ❌ No procede reembolso |\n\n**Detalles:**\n\n- **cob_7E8Q4 (Transferencia):** Cobro procesado correctamente. Procede reembolso estándar.\n\n- **cob_7F3K2 (Tarjeta de crédito):** Este cobro fue rechazado en origen (código de error **TMB-2031**, tras 3 intentos). Como los fondos nunca se transfirieron a Ferretería López, no hay dinero que devolver. Se recomienda investigar la causa del rechazo con el cliente antes de cualquier otra acción.\n\nPodemos proceder con el reembolso de **cob_7E8Q4**. Para **cob_7F3K2**, requerimos información adicional del comercio sobre si desea reintentar el cobro o si necesita auditoría del error.",
+      "pregunta": "¿Aprobás reembolsar cob_7E8Q4, cob_7F3K2?"
+    },
+    "resultado": null,
+    "error": null
+  },
+  "final": {
+    "id": "bc205b4ec92d4176b6b597cb9d9f40a8",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "DONE",
+    "creado": "2026-10-18T22:57:58.984421Z",
+    "actualizado": "2026-10-18T22:58:36.159354Z",
+    "aprobacion": null,
+    "resultado": {
+      "respuesta_final": "**RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS**\n\n---\n\n**Re: Solicitud de reembolso - Ferretería López**\n\nConfirmamos el estado y monto de los cobros solicitados:\n\n| Cobro | Estado | Monto | Resultado |\n|-------|--------|-------|-----------|\n| **cob_7E8Q4** | Aprobado | 8.700,00 ARS | ✅ Elegible para reembolso |\n| **cob_7F3K2** | Rechazado | 45.990,00 ARS | ❌ No procede reembolso |\n\n**Detalles:**\n\n- **cob_7E8Q4 (Transferencia):** Cobro procesado correctamente. Procede reembolso estándar.\n\n- **cob_7F3K2 (Tarjeta de crédito):** Este cobro fue rechazado en origen (código de error **TMB-2031**, tras 3 intentos). Como los fondos nunca se transfirieron a Ferretería López, no hay dinero que devolver. Se recomienda investigar la causa del rechazo con el cliente antes de cualquier otra acción.\n\nPodemos proceder con el reembolso de **cob_7E8Q4**. Para **cob_7F3K2**, requerimos información adicional del comercio sobre si desea reintentar el cobro o si necesita auditoría del error.",
+      "resultado_accion": "cob_7E8Q4: reembolso de 8.700,00 ARS registrado.\ncob_7F3K2: está rechazado; solo se reembolsan cobros aprobados.",
+      "revision": {
+        "aprobado": true,
+        "revisor": "probar_api.py",
+        "comentario": "verificado en la prueba"
+      },
+      "decisiones": [
+        {
+          "evaluacion": "No hay aportes aún. El pedido solicita reembolsar dos cobros específicos (cob_7E8Q4 y cob_7F3K2) de Ferretería López, pero antes hay que confirmar su estado y monto.",
+          "siguiente": "investigador",
+          "instruccion": "Consulta la base de cobros y trae el estado y el monto exacto de los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Confirmá que existen y están asociados a ese comercio.",
+          "motivo": "Necesitamos datos verificables (estados y montos) antes de proceder con el reembolso; solo el investigador puede acceder a la base de cobros."
+        },
+        {
+          "evaluacion": "El investigador cumplió correctamente: trajo los datos concretos de los dos cobros (IDs, estados, montos exactos, fechas, medios). Confirmó que ambos existen y están asociados a Ferretería López. Sin embargo, hay un problema: cob_7F3K2 está en estado \"Rechazado\", no en un estado típicamente reembolsable (como \"Aprobado\" o \"Pendiente\"). El aporte es completo en datos, pero levanta una cuestión de procedimiento: ¿se pueden reembolsar cobros rechazados? Eso requiere validación antes de proceder con el reembolso.",
+          "siguiente": "analista",
+          "instruccion": "Validá si los cobros cob_7E8Q4 (Aprobado, 8.700,00 ARS) y cob_7F3K2 (Rechazado, 45.990,00 ARS) son elegibles para reembolso según los procedimientos de Tambor. Indicá qué criterios aplican y si hay restricciones o consideraciones especiales por el estado \"Rechazado\" del segundo cobro.",
+          "motivo": "El analista debe validar si ambos cobros cumplen los requisitos para ser reembolsados según los procedimientos de Tambor (hay un cobro rechazado que puede no ser elegible)."
+        },
+        {
+          "evaluacion": "El investigador trajo datos completos y verificables (IDs, montos, estados, códigos de error, medio de pago, fecha). El analista validó correctamente la elegibilidad según procedimientos: cob_7E8Q4 es elegible (Aprobado), cob_7F3K2 no es elegible para reembolso (Rechazado = fondos nunca se transfirieron). El analista además aclaró que el segundo cobro requiere investigación de la causa raíz, no reembolso. Ambos aportes responden exactamente a sus instrucciones y cubren todas las partes necesarias del pedido del usuario (confirmación de estado, monto, y validación de elegibilidad).",
+          "siguiente": "sintesis",
+          "instruccion": "",
+          "motivo": "Ya se tiene confirmación completa de datos (investigador) y validación de elegibilidad (analista). El usuario debe ser informado de que solo cob_7E8Q4 es elegible para reembolso y que cob_7F3K2 requiere un abordaje distinto."
+        }
+      ],
+      "aportes": [
+        {
+          "agente": "investigador",
+          "instruccion": "Consulta la base de cobros y trae el estado y el monto exacto de los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Confirmá que existen y están asociados a ese comercio.",
+          "contenido": "**Confirmación de cobros - Ferretería López (ID: 102)**\n\n✅ **cob_7E8Q4**\n- **Estado:** Aprobado\n- **Monto:** 8.700,00 ARS\n- **Fecha:** 2026-10-04 11:15:02\n- **Medio:** Transferencia\n- **Intentos:** 1\n- **Comercio asociado:** Ferretería López ✓\n\n✅ **cob_7F3K2**\n- **Estado:** Rechazado\n- **Monto:** 45.990,00 ARS\n- **Fecha:** 2026-10-06 19:42:10\n- **Medio:** Tarjeta de crédito\n- **Intentos:** 3\n- **Código de error:** TMB-2031\n- **Comercio asociado:** Ferretería López ✓\n\n**Ambos cobros existen y están correctamente asociados a Ferretería López (ID 102).**",
+          "herramientas": [
+            "buscar_comercio",
+            "consultar_cobro",
+            "consultar_cobro"
+          ],
+          "error": false,
+          "ms": 6548.800799995661
+        },
+        {
+          "agente": "analista",
+          "instruccion": "Validá si los cobros cob_7E8Q4 (Aprobado, 8.700,00 ARS) y cob_7F3K2 (Rechazado, 45.990,00 ARS) son elegibles para reembolso según los procedimientos de Tambor. Indicá qué criterios aplican y si hay restricciones o consideraciones especiales por el estado \"Rechazado\" del segundo cobro.",
+          "contenido": "---\n\n## ANÁLISIS DE ELEGIBILIDAD PARA REEMBOLSO\n\n### **✅ cob_7E8Q4 (Aprobado, 8.700,00 ARS)**\n\n**Criterios de elegibilidad:**\n- **Estado:** Aprobado ✓ – El cobro se procesó exitosamente\n- **Comercio:** Asociación confirmada a Ferretería López ✓\n- **Monto:** 8.700,00 ARS válido ✓\n- **Medio:** Transferencia (traza clara, sin intermediarios) ✓\n\n**Conclusión:** **SÍ es elegible para reembolso**. Cobro válido con estado terminal positivo. Procede reembolso estándar.\n\n---\n\n### **⚠️ cob_7F3K2 (Rechazado, 45.990,00 ARS)**\n\n**Criterios de elegibilidad:**\n- **Estado:** Rechazado ✗ – Cobro NO procesado\n- **Comercio:** Asociación confirmada a Ferretería López ✓\n- **Monto:** 45.990,00 ARS válido ✓\n- **Código de error:** TMB-2031 registrado\n- **Intentos:** 3 (múltiples reintentos previos)\n\n**Restricciones y consideraciones especiales:**\n\n1. **Restricción primaria:** Los cobros rechazados **NO generan reembolso** en sentido técnico, ya que los fondos nunca se transfirieron al comercio (no hay dinero que devolver al cliente).\n\n2. **Posibles acciones alternas:**\n   - Si el cliente solicita reembolso: informarle que el cobro fue rechazado en origen y no se debitó su cuenta\n   - Si requiere auditoría: investigar TMB-2031 (código de error específico) para resolver la causa raíz\n   - Si necesita reintento: evaluar si el cliente puede reintentar con otro medio\n\n3. **Consideración por estado rechazado:** El rechazo tras 3 intentos sugiere un problema persistente (límite disponible, datos incorrectos, decisión de emisor). No es caso de reembolso sino de revisión de causas.\n\n---\n\n**Resumen:**\n- **cob_7E8Q4:** ✅ Elegible para reembolso\n- **cob_7F3K2:** ❌ No elegible (no es reembolso sino análisis de rechazo)",
+          "herramientas": [
+            "estadisticas_cobros"
+          ],
+          "error": false,
+          "ms": 9421.272400009912
+        }
+      ]
+    },
+    "error": null
+  }
+}

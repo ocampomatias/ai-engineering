@@ -1,0 +1,10 @@
+.env
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
+.cache
+vectorstore
+curso-por-modulo
+program-summary.pdf
+memoria_agente.sqlite*

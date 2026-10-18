@@ -2,6 +2,7 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| Pre-entrega 7 | API de producción: FastAPI asíncrona, estado y checkpoints en Redis, trazas en Phoenix y aprobación humana | `app/`, `probar_api.py`, `screenshots/` |
 | Pre-entrega 6 | Orquestador multi-agente con LangGraph: supervisor, investigador y analista con estado compartido | `orquestador/`, `probar_orquestador.py`, `demo_orquestador.ipynb` |
 | Pre-entrega 5 | Agente ReAct con LangGraph: herramientas propias, razonamiento en varios pasos y memoria en SQLite | `agente/`, `probar_agente.py`, `chat_agente.py` |
 | Pre-entrega 4 | RAG escalable en Pinecone con búsqueda híbrida (BM25 + vectorial) y evaluación | `rag_pinecone/`, `setup_pinecone.py`, `ingestar_pinecone.py`, `evaluate.py`, `corpus/` |
@@ -9,8 +10,323 @@
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las seis: están en
+La instalación y las variables de entorno son las mismas para las siete: están en
 [Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+
+# Pre-entrega 7: API de producción con Redis, Phoenix y aprobación humana
+
+El orquestador de la pre-entrega 6 ahora corre detrás de una API REST. Un pedido entra por
+`POST /tasks`, queda encolado en Redis y la API devuelve un `job_id` sin esperar al grafo. Unos
+workers toman los trabajos de la cola, corren el orquestador con el estado guardado en Redis y
+mandan cada paso a Arize Phoenix. Si un pedido pide reembolsar cobros, el grafo se detiene y no
+mueve plata hasta que una persona lo apruebe por `POST /tasks/{id}/approve`.
+
+Las capturas del panel de Phoenix están en [`screenshots/`](screenshots/).
+
+## Arquitectura
+
+```mermaid
+graph LR
+    C[cliente] -->|POST /tasks| A[FastAPI]
+    A -->|MULTI: SET job + LPUSH cola| R[(Redis Cloud)]
+    W[5 workers] -->|BRPOP cola| R
+    W -->|ainvoke, thread_id = job_id| G[grafo LangGraph]
+    G -->|checkpoints| R
+    W -->|estado del job| R
+    C -->|GET /tasks/id| A
+    G -.->|trazas OTLP| P[Phoenix]
+    A -.->|trazas OTLP| P
+```
+
+- **La API no corre el grafo.** Los endpoints solo leen y escriben en Redis, siempre con
+  `redis.asyncio` y `await`: ninguno bloquea el event loop. Un pedido de 45 segundos no frena a los
+  demás requests.
+- **La cola es una lista de Redis**, no una cola en memoria. Si la API se reinicia, lo encolado no
+  se pierde, y los workers podrían pasar a otro proceso (o a Arq/Celery) sin tocar la API.
+- **Los workers son tareas de asyncio** en el mismo proceso (`WORKERS=5`), como permite la consigna
+  para esta etapa.
+
+El grafo es el de la pre-entrega 6 con dos nodos más al final (`evidencia/grafo_api.mmd`):
+
+```mermaid
+graph TD;
+	__start__([__start__]):::first
+	supervisor(supervisor)
+	investigador(investigador)
+	analista(analista)
+	sintesis(sintesis)
+	aprobacion(aprobacion)
+	reembolso(reembolso)
+	__end__([__end__]):::last
+	__start__ --> supervisor;
+	analista --> supervisor;
+	aprobacion -.-> __end__;
+	aprobacion -.-> reembolso;
+	investigador --> supervisor;
+	sintesis -.-> __end__;
+	sintesis -.-> aprobacion;
+	supervisor -.-> analista;
+	supervisor -.-> investigador;
+	supervisor -.-> sintesis;
+	reembolso --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+```
+
+## Correrlo
+
+Con el entorno instalado (ver [Instalación](#instalación)), hacen falta tres cosas.
+
+**1. Redis 8.** El checkpointer de LangGraph usa los módulos JSON y Search, que Redis 8 trae de
+fábrica. Yo usé el plan gratis de [Redis Cloud](https://redis.io/try-free/): una base Essentials de
+30 MB en AWS us-east-1. Desde la base, en **Connect → Redis CLI**, se copia la URL y se pega en
+el `.env`:
+
+```
+REDIS_URL=redis://default:CONTRASEÑA@HOST:PUERTO
+```
+
+Con Docker, en cambio, alcanza con `docker run -d -p 6379:6379 redis:8` y
+`REDIS_URL=redis://localhost:6379`.
+
+**2. Phoenix.** Viene en `requirements.txt` (`arize-phoenix`). En una terminal aparte:
+
+```bash
+phoenix serve
+```
+
+El panel queda en http://localhost:6006. Para usar Phoenix Cloud en vez del local, alcanza con
+`PHOENIX_COLLECTOR_ENDPOINT` y `PHOENIX_API_KEY` en el `.env`. Si Phoenix no está levantado, la API
+funciona igual: solo se pierden las trazas.
+
+**3. La API:**
+
+```bash
+uvicorn app.main:app --port 8000
+```
+
+La documentación interactiva queda en http://localhost:8000/docs. Con la API corriendo, en otra
+terminal:
+
+```bash
+python probar_api.py --carga
+```
+
+```bash
+python probar_api.py --hitl
+```
+
+```bash
+python probar_api.py --hitl --rechazar
+```
+
+`--carga` manda 5 pedidos a la vez y espera a que terminen. `--hitl` manda un pedido de reembolso,
+espera a que se detenga, lo aprueba y espera el resultado; con `--rechazar`, lo rechaza.
+
+**Con Docker Compose** (API + Redis 8 + Phoenix), con las API keys en el `.env`:
+
+```bash
+docker compose up --build
+```
+
+No lo pude probar: no tengo Docker instalado. Todo lo de este README corrió con Redis Cloud y
+Phoenix local.
+
+## Endpoints
+
+| Método | Ruta | Qué hace | Respuesta |
+|---|---|---|---|
+| `POST` | `/tasks` | Guarda el trabajo como `PENDING` y lo encola, en una transacción | `202` con el trabajo |
+| `GET` | `/tasks/{id}` | Estado del trabajo, y el resultado o el error | `200`, o `404` |
+| `POST` | `/tasks/{id}/approve` | Aprueba o rechaza un reembolso en espera | `202`, `404`, o `409` si no espera aprobación |
+| `GET` | `/health` | Ping a Redis | `200` |
+
+```bash
+curl -X POST localhost:8000/tasks -H "Content-Type: application/json" -d "{\"pedido\": \"Que tasa de rechazo tiene el Cafe del Puerto?\"}"
+```
+
+Estados de un trabajo:
+
+```
+PENDING -> RUNNING -> DONE
+                   -> WAITING_APPROVAL -(POST /approve)-> PENDING -> RUNNING -> DONE
+                   -> FAILED (excepción o más de JOB_TIMEOUT_S)
+```
+
+Cualquier excepción en el worker, sea del grafo o de lo que viene después, deja el trabajo en
+`FAILED` con el error. Es lo que la consigna marca como error común: sin eso, el cliente consulta
+para siempre un trabajo en `RUNNING`.
+
+## Persistencia en Redis
+
+| Clave | Qué guarda | Vence |
+|---|---|---|
+| `tambor:job:{id}` | El trabajo: estado, pedido, aprobación pendiente, resultado o error (JSON) | 7 días |
+| `tambor:cola` | Lista de mensajes `{job_id}` o `{job_id, resume}` | — |
+| `tambor:job:{id}:revision` | Marca de que el trabajo ya recibió su revisión (`SET NX`) | 7 días |
+| `tambor:reembolsos` | Hash `cobro_id → reembolso`: el efecto secundario del flujo | — |
+| `checkpoint*` | Checkpoints de LangGraph (`AsyncRedisSaver`), uno por paso, con `thread_id = job_id` | `CHECKPOINT_TTL_MIN` (1 día) |
+
+El checkpointer es lo que permite que un trabajo se detenga en `aprobacion` y se reanude más tarde,
+en otro request y con otro worker: el estado completo del grafo queda en Redis y el worker lo retoma
+con el mismo `thread_id`.
+
+## Aprobación humana (`app/hitl.py`)
+
+**Qué es crítico.** Reembolsar cobros: es la única acción del sistema que tiene un efecto
+secundario y mueve plata. Lo decide `detectar_accion` con una regla fija, no el LLM: un verbo de
+reembolso (reembolsar, devolver, reintegrar) más IDs de cobro `cob_XXXXX` escritos en el pedido.
+Así, un modelo confundido no tiene forma de saltearse la revisión. Un pedido como "reembolsá el
+último cobro de López", sin IDs, no se detecta: se analiza, pero no se ejecuta nada.
+
+**El flujo.** El pedido pasa primero por los agentes como cualquier otro: el investigador confirma
+el estado y el monto de cada cobro, y la síntesis lo resume. Después:
+
+1. El nodo `aprobacion` llama a `interrupt()` con la acción y el análisis. El grafo se detiene y el
+   checkpoint queda en Redis.
+2. El worker ve el `__interrupt__` y marca el trabajo `WAITING_APPROVAL`, con el análisis
+   adentro: quien revisa decide con los datos a la vista.
+3. `POST /tasks/{id}/approve` con `{"aprobado": true, "revisor": "ana", "comentario": "..."}`
+   encola la respuesta. Un `SET NX` impide que dos aprobaciones simultáneas lo reanuden dos veces
+   (la segunda recibe `409`).
+4. El worker reanuda con `Command(resume=revisión)`. Si se aprobó, el nodo `reembolso` valida
+   cada cobro contra la base (solo se reembolsan los aprobados) y lo registra con `HSETNX`: un
+   cobro no se reembolsa dos veces.
+
+## Observabilidad (`app/observability.py`)
+
+`phoenix.otel.register()` arma el exportador OTLP y `LangChainInstrumentor` instrumenta LangChain y
+LangGraph: cada nodo, cada llamada al LLM (con tokens, costo y latencia) y cada herramienta quedan
+como un span, sin decorar función por función. Encima de eso:
+
+- El worker abre un span `job` (o `job.reanudar`) por ejecución, con el pedido como entrada y la
+  respuesta como salida.
+- `using_session(job_id)` agrupa las trazas de un trabajo en una sesión de Phoenix: la corrida que
+  se detuvo esperando aprobación y la que la completó quedan juntas.
+- FastAPI traza los requests por su cuenta. Excluí los `GET`: con el polling eran cientos de trazas
+  de ruido.
+
+| Captura | Qué muestra |
+|---|---|
+| [`01_trabajos.png`](screenshots/01_trabajos.png) | Los trabajos de la prueba de carga y de las dos aprobaciones, con su entrada y salida |
+| [`02_traza_de_un_pedido.png`](screenshots/02_traza_de_un_pedido.png) | Una traza completa: supervisor, investigador, herramientas y cada llamada al modelo, con latencia, tokens y costo ($0,09) |
+| [`03_sesiones_por_job.png`](screenshots/03_sesiones_por_job.png) | Una sesión por `job_id` |
+| [`04_sesion_aprobacion_humana.png`](screenshots/04_sesion_aprobacion_humana.png) | El reembolso aprobado: turno 1 hasta `WAITING_APPROVAL` (32,9 s, $0,06), turno 2 con la aprobación (1,7 s, sin llamar al modelo) |
+
+## Resultados
+
+Contra Redis Cloud, Phoenix local y `claude-haiku-4-5`.
+
+**5 pedidos concurrentes** (`python probar_api.py --carga`, en `evidencia/salida_carga_api.txt`):
+
+| Pedido | Agentes | POST | Total |
+|---|---|---|---|
+| Últimos 5 cobros de Ferretería López: % rechazado y qué hacer con cada error | investigador → analista | 1,07 s | 46,7 s |
+| Tasa de rechazo de Librería Andina contra Café del Puerto | investigador → analista | 1,04 s | 45,6 s |
+| Cuánto cobró Café del Puerto en sus últimos 5 cobros aprobados | investigador → analista | 1,04 s | 25,6 s |
+| Cobros en revisión de Farmacia López Hermanos | investigador | 1,04 s | 19,8 s |
+| Qué dice la documentación sobre TMB-2031 | investigador | 0,40 s | 17,9 s |
+
+Los cinco terminaron en `DONE`. Todos juntos tardaron 46,7 s; uno detrás del otro habrían sido
+155,6 s. En el log de la API no hubo ningún error (`evidencia/log_api.log`).
+
+**Aprobación humana** (`evidencia/salida_hitl_api.txt`): el pedido "Reembolsá los cobros
+cob_7E8Q4 y cob_7F3K2 de Ferretería López" se detuvo en `WAITING_APPROVAL` con el análisis de los
+agentes: el primero está aprobado (8.700,00 ARS) y el segundo rechazado. Al aprobarlo:
+
+```
+cob_7E8Q4: reembolso de 8.700,00 ARS registrado.
+cob_7F3K2: está rechazado; solo se reembolsan cobros aprobados.
+```
+
+Rechazado (`evidencia/salida_hitl_rechazo_api.txt`), terminó en `DONE` sin ejecutar nada, y en
+`tambor:reembolsos` quedó un solo registro.
+
+**Costo:** según Phoenix, entre 0,06 y 0,09 USD por pedido con `claude-haiku-4-5`.
+
+## Lo que encontré
+
+**La cola perdía mensajes.** La primera aprobación nunca se ejecutó: el trabajo quedó en `PENDING`
+para siempre. El worker esperaba en `BRPOP` hasta 5 segundos, y redis-py corta cualquier lectura a
+los 5 segundos (`socket_timeout`). Con 145 ms de ida y vuelta hasta Virginia, el cliente se rendía
+justo cuando Redis ya había sacado el mensaje de la lista. El mensaje se perdía, y el log tenía 528
+timeouts. Bajé la espera de `BRPOP` a 2 segundos y no hubo ninguno más. El arreglo de fondo sería
+`BLMOVE` a una lista de "en proceso": así, ni una caída del worker pierde mensajes.
+
+**Lo que volvía de Redis no era lo que se había guardado.** Al reanudar después de la aprobación,
+el worker fallaba: `Aporte` y `Decision` llegaban como `{"lc": 2, "type": "constructor", ...}` en
+vez de objetos de Pydantic. El serializador de `AsyncRedisSaver` solo reconstruye las clases que
+se le autorizan, por seguridad. Los tests no lo detectaban, porque el checkpointer en memoria sí los
+reconstruye. Ahora `serializador_redis()` autoriza los cuatro modelos del estado, y un test guarda
+y relee el estado con ese serializador.
+
+**Un error después del grafo dejaba el trabajo en `RUNNING`.** El `try` cubría solo la ejecución
+del grafo, y el error anterior pasó en el armado del resultado. Ahora cualquier excepción del worker
+termina en `FAILED`, y hay un test para eso.
+
+**Los checkpoints llenaban el plan gratis.** Cada trabajo deja unos 0,7 MB en Redis: un
+checkpoint por paso, con todo el historial de mensajes. Sin vencimiento, los 30 MB se llenaban en
+unas decenas de pedidos. Les puse TTL de un día (`CHECKPOINT_TTL_MIN`). El costo de esa decisión: un
+trabajo que espera aprobación más de un día ya no se puede reanudar.
+
+**El POST tarda por la distancia, no por el grafo.** Un `POST /tasks` suelto tarda entre 0,36 y
+0,5 s, y casi todo es la ida y vuelta a Redis Cloud (145 ms por viaje) desde Argentina. En la ráfaga
+de 5 tardó 1 s porque además abre conexiones nuevas. Junté el `SET` y el `LPUSH` en una sola
+transacción, que es un solo viaje y además atómica. Con Redis en la misma red, serían milisegundos.
+
+**Lo que no resolví.** Si la API se apaga con un trabajo en `RUNNING`, ese trabajo queda así: nada
+lo retoma al arrancar. Con `BLMOVE` y una lista de "en proceso" se podrían reencolar al reiniciar.
+
+## Tests
+
+```bash
+python -m pytest -q tests/test_api.py
+```
+
+Son 9 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
+`InMemorySaver`, y los modelos son los guionados de la pre-entrega 6. La API se prueba por HTTP
+con los workers corriendo. Cubren:
+
+- la detección de reembolsos (con y sin verbo, con y sin IDs);
+- el flujo normal: `202`, `PENDING` y después `DONE` con el resultado;
+- validación (`422`) y `404`;
+- `FAILED` cuando falla un nodo y cuando falla algo después del grafo, con el worker vivo después;
+- la aprobación: se detiene, no ejecuta nada antes de aprobar, la segunda aprobación da `409`, solo
+  reembolsa el cobro aprobado, y el rechazo no ejecuta nada;
+- el serializador de Redis: el estado vuelve con sus tipos.
+
+Con los de las pre-entregas anteriores son 217:
+
+```bash
+python -m pytest -q
+```
+
+## Archivos
+
+```
+app/
+  main.py                   FastAPI: POST /tasks, GET /tasks/{id}, /health; levanta los workers
+  graph.py                  el orquestador del M6 + aprobación + reembolso; serializador de Redis
+  worker.py                 toma trabajos de la cola, corre el grafo, PENDING/RUNNING/DONE/FAILED
+  jobs.py                   estado de los trabajos y cola en Redis
+  hitl.py                   qué es crítico, nodo con interrupt(), reembolso y POST /approve
+  observability.py          Phoenix + OpenInference
+probar_api.py               5 pedidos concurrentes y el flujo de aprobación
+docker-compose.yml          API + Redis 8 + Phoenix (sin probar)
+Dockerfile
+screenshots/                capturas del panel de Phoenix
+evidencia/
+  salida_carga_api.txt      la prueba de carga
+  carga_api.json            lo mismo, con las respuestas
+  salida_hitl_api.txt       aprobación
+  salida_hitl_rechazo_api.txt
+  hitl_api_aprobado.json    el trabajo en espera y el final
+  hitl_api_rechazado.json
+  log_api.log               el log de la API durante las pruebas
+  grafo_api.mmd             el diagrama del grafo
+tests/test_api.py           9 tests sin API keys
+```
 
 # Pre-entrega 6: orquestador multi-agente con supervisor
 
@@ -1435,6 +1751,14 @@ En PowerShell, `Copy-Item .env.example .env`. En Linux o macOS, `cp .env.example
 | `INDEX_NAME` | `tambor-docs` | Índice serverless de Pinecone; si no existe, se crea |
 | `PINECONE_NAMESPACE` | `plataforma` | Partición del índice donde va el corpus |
 | `PINECONE_CLOUD` / `PINECONE_REGION` | `aws` / `us-east-1` | Dónde se crea el índice (la región del plan gratuito) |
+| `REDIS_URL` | vacío | Redis 8 para la API: estado de los trabajos, cola y checkpoints (pre-entrega 7) |
+| `WORKERS` | `5` | Workers que procesan la cola en paralelo |
+| `JOB_TIMEOUT_S` | `300` | Segundos máximos por ejecución del grafo; pasado eso, `FAILED` |
+| `CHECKPOINT_TTL_MIN` | `1440` | Minutos que duran los checkpoints en Redis |
+| `PHOENIX_COLLECTOR_ENDPOINT` | `http://localhost:6006` | Dónde mandar las trazas |
+| `PHOENIX_PROJECT_NAME` | `tambor-api` | Proyecto de Phoenix |
+| `PHOENIX_API_KEY` | vacío | Solo para Phoenix Cloud |
+| `PHOENIX_DISABLED` | vacío | `1` para no mandar trazas |
 
 Los dos modelos por defecto son los más baratos de cada proveedor, que para probar el cliente
 alcanzan de sobra. Si necesitás más capacidad, cambiá `ANTHROPIC_MODEL` o `OPENAI_MODEL` en el

@@ -1,0 +1,35 @@
+Pedido encolado: 89909654118d4accbcdbb1485e02860e
+  Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.
+
+ESPERA APROBACIÓN: ¿Aprobás reembolsar cob_7E8Q4, cob_7F3K2?
+
+Análisis de los agentes:
+# RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS
+
+**Ferretería López - Solicitud de reembolsos**
+
+---
+
+## ✅ CONFIRMACIÓN DE ESTADO Y MONTOS
+
+| ID Cobro | Monto | Estado | Observación |
+|----------|-------|--------|-------------|
+| **cob_7E8Q4** | 8.700,00 ARS | Aprobado | Elegible para reembolso |
+| **cob_7F3K2** | 45.990,00 ARS | Rechazado (error TMB-2031) | NO elegible para reembolso |
+
+---
+
+## 📋 DECISIÓN
+
+**cob_7E8Q4 (8.700,00 ARS):** ✅ **REEMBOLSABLE**  
+Cobro aprobado. Puede procesarse reembolso total o parcial dentro del plazo de 180 días desde la fecha de aprobación (2026-10-04).
+
+**cob_7F3K2 (45.990,00 ARS):** ❌ **NO REEMBOLSABLE**  
+Cobro rechazado por error TMB-2031 (Autenticación 3-D Secure fallida). Según la política oficial de Tambor, solo se reembolsan cobros aprobados. Este cobro nunca fue procesado. 
+
+**Acción sugerida:** Ofrecer a Ferretería López reintentar el pago con la tarjeta tras el período de bloqueo de 24 horas, o usar un medio de pago alternativo.
+
+POST /approve False -> 202
+
+DONE. Resultado de la acción:
+(no se ejecutó)

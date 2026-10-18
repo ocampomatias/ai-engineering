@@ -1,0 +1,103 @@
+{
+  "en_espera": {
+    "id": "89909654118d4accbcdbb1485e02860e",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "WAITING_APPROVAL",
+    "creado": "2026-10-18T22:58:44.148707Z",
+    "actualizado": "2026-10-18T22:59:41.895085Z",
+    "aprobacion": {
+      "accion": {
+        "tipo": "reembolso",
+        "cobro_ids": [
+          "cob_7E8Q4",
+          "cob_7F3K2"
+        ]
+      },
+      "analisis": "# RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS\n\n**Ferretería López - Solicitud de reembolsos**\n\n---\n\n## ✅ CONFIRMACIÓN DE ESTADO Y MONTOS\n\n| ID Cobro | Monto | Estado | Observación |\n|----------|-------|--------|-------------|\n| **cob_7E8Q4** | 8.700,00 ARS | Aprobado | Elegible para reembolso |\n| **cob_7F3K2** | 45.990,00 ARS | Rechazado (error TMB-2031) | NO elegible para reembolso |\n\n---\n\n## 📋 DECISIÓN\n\n**cob_7E8Q4 (8.700,00 ARS):** ✅ **REEMBOLSABLE**  \nCobro aprobado. Puede procesarse reembolso total o parcial dentro del plazo de 180 días desde la fecha de aprobación (2026-10-04).\n\n**cob_7F3K2 (45.990,00 ARS):** ❌ **NO REEMBOLSABLE**  \nCobro rechazado por error TMB-2031 (Autenticación 3-D Secure fallida). Según la política oficial de Tambor, solo se reembolsan cobros aprobados. Este cobro nunca fue procesado. \n\n**Acción sugerida:** Ofrecer a Ferretería López reintentar el pago con la tarjeta tras el período de bloqueo de 24 horas, o usar un medio de pago alternativo.",
+      "pregunta": "¿Aprobás reembolsar cob_7E8Q4, cob_7F3K2?"
+    },
+    "resultado": null,
+    "error": null
+  },
+  "final": {
+    "id": "89909654118d4accbcdbb1485e02860e",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "DONE",
+    "creado": "2026-10-18T22:58:44.148707Z",
+    "actualizado": "2026-10-18T22:59:45.894751Z",
+    "aprobacion": null,
+    "resultado": {
+      "respuesta_final": "# RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS\n\n**Ferretería López - Solicitud de reembolsos**\n\n---\n\n## ✅ CONFIRMACIÓN DE ESTADO Y MONTOS\n\n| ID Cobro | Monto | Estado | Observación |\n|----------|-------|--------|-------------|\n| **cob_7E8Q4** | 8.700,00 ARS | Aprobado | Elegible para reembolso |\n| **cob_7F3K2** | 45.990,00 ARS | Rechazado (error TMB-2031) | NO elegible para reembolso |\n\n---\n\n## 📋 DECISIÓN\n\n**cob_7E8Q4 (8.700,00 ARS):** ✅ **REEMBOLSABLE**  \nCobro aprobado. Puede procesarse reembolso total o parcial dentro del plazo de 180 días desde la fecha de aprobación (2026-10-04).\n\n**cob_7F3K2 (45.990,00 ARS):** ❌ **NO REEMBOLSABLE**  \nCobro rechazado por error TMB-2031 (Autenticación 3-D Secure fallida). Según la política oficial de Tambor, solo se reembolsan cobros aprobados. Este cobro nunca fue procesado. \n\n**Acción sugerida:** Ofrecer a Ferretería López reintentar el pago con la tarjeta tras el período de bloqueo de 24 horas, o usar un medio de pago alternativo.",
+      "resultado_accion": null,
+      "revision": {
+        "aprobado": false,
+        "revisor": "probar_api.py",
+        "comentario": "rechazado en la prueba"
+      },
+      "decisiones": [
+        {
+          "evaluacion": "Aún no hay aportes del equipo. El usuario solicita reembolsar dos cobros específicos (cob_7E8Q4 y cob_7F3K2) de Ferretería López, pero pide primero confirmación del estado y monto de cada uno.",
+          "siguiente": "investigador",
+          "instruccion": "Consultá en la base de cobros los datos de cob_7E8Q4 y cob_7F3K2 de Ferretería López. Para cada uno, traé: ID del cobro, monto exacto, estado actual y cualquier observación relevante para un reembolso.",
+          "motivo": "Necesitamos datos verificables (estado y monto) de los cobros específicos antes de proceder. Solo el investigador puede consultar la base de comercios y cobros."
+        },
+        {
+          "evaluacion": "El investigador entregó datos concretos y verificables: dos cobros con IDs, montos exactos, estados y observaciones relevantes. Cumple con la instrucción. Sin embargo, hay un problema crítico: el pedido del usuario es \"reembolsá los cobros\", pero cob_7F3K2 está en estado \"Rechazado\" (nunca se cobró realmente). No se puede reembolsar un cobro que no fue aprobado. Además, cob_7E8Q4 está aprobado, pero reembolsarlo requiere validar si es procedente y si hay restricciones según la documentación de Tambor.",
+          "siguiente": "analista",
+          "instruccion": "Validá cuál de estos cobros puede reembolsarse según la política de Tambor: cob_7E8Q4 (8.700,00 ARS, estado Aprobado) y cob_7F3K2 (45.990,00 ARS, estado Rechazado, error 3-D Secure). ¿Cuál es elegible para reembolso? ¿Hay plazos o restricciones? Explicitá qué regla consultaste.",
+          "motivo": "El analista debe validar cuál de los dos cobros es elegible para reembolso según la política de Tambor y confirmar si hay restricciones (plazos, estados válidos, etc.). Esto requiere cálculo/validación de reglas, no más búsqueda de datos."
+        },
+        {
+          "evaluacion": "El analista validó los datos concretos (IDs, montos, estados) correctamente, pero identificó correctamente que sin la política oficial de reembolsos de Tambor no puede determinar elegibilidad. El aporte responde parcialmente: confirma que cob_7E8Q4 es aprobado (elegible típicamente) y cob_7F3K2 es rechazado (típicamente no reembolsable), pero declara explícitamente la falta de información crítica. Falta la regla exacta de Tambor para un cobro rechazado con error 3-D Secure.",
+          "siguiente": "investigador",
+          "instruccion": "Consultá la documentación interna de Tambor sobre política de reembolsos: ¿Qué cobros son elegibles para reembolso (aprobados, rechazados, ambos)? Para el caso específico de un cobro rechazado por error TMB-2031 (3-D Secure fallido), ¿se considera reembolsable o se lo trata como un cobro que nunca se procesó? ¿Hay plazo máximo desde la fecha del cobro para solicitar reembolso? Traé los códigos o referencias exactos de las normas que apliquen.",
+          "motivo": "El investigador debe consultar la documentación interna de Tambor (políticas de reembolsos, SLA, procedimientos) para aclarar si un cobro rechazado por error 3-D Secure es elegible para reembolso y qué plazo aplica para el aprobado."
+        },
+        {
+          "evaluacion": "El investigador respondió exactamente la instrucción: consultó la política oficial de reembolsos y la documentación sobre TMB-2031, trayendo datos concretos (códigos de error TMB-3001, TMB-3002, TMB-2031, plazo de 180 días, referencias exactas de fuentes: api-cobros.md y catalogo-errores.json). Los datos son verificables y resuelven la pregunta de elegibilidad. Todos los aportes anteriores ya cubrieron los datos técnicos de los cobros (montos, estados, códigos de error).",
+          "siguiente": "sintesis",
+          "instruccion": "",
+          "motivo": "Hay información suficiente para responder: cob_7E8Q4 es elegible (aprobado, dentro de plazo), cob_7F3K2 no es elegible (rechazado, nunca fue procesado). Procede redactar la respuesta final con la decisión y el motivo según la política oficial de Tambor."
+        }
+      ],
+      "aportes": [
+        {
+          "agente": "investigador",
+          "instruccion": "Consultá en la base de cobros los datos de cob_7E8Q4 y cob_7F3K2 de Ferretería López. Para cada uno, traé: ID del cobro, monto exacto, estado actual y cualquier observación relevante para un reembolso.",
+          "contenido": "**DATOS DE LOS COBROS - FERRETERÍA LÓPEZ**\n\n---\n\n**Cobro 1:**\n- **ID:** cob_7E8Q4\n- **Monto exacto:** 8.700,00 ARS\n- **Estado actual:** Aprobado\n- **Medio de pago:** Transferencia\n- **Fecha:** 2026-10-04 11:15:02\n- **Intentos:** 1\n- **Observación para reembolso:** Cobro aprobado exitosamente. Sin código de error.\n\n---\n\n**Cobro 2:**\n- **ID:** cob_7F3K2\n- **Monto exacto:** 45.990,00 ARS\n- **Estado actual:** Rechazado\n- **Medio de pago:** Tarjeta de crédito\n- **Fecha:** 2026-10-06 19:42:10\n- **Intentos:** 3\n- **Código de error:** TMB-2031\n- **Observación para reembolso:** \n  - **Causa:** Autenticación 3-D Secure fallida. El comprador no completó o completó mal el desafío de 3-D Secure.\n  - **Acción requerida:** Se realizaron 3 intentos fallidos. Según la documentación, la tarjeta se bloquea 24 horas para ese comercio. Se debe ofrecer reintentar el pago después del período de bloqueo o sugerir un medio de pago alternativo.",
+          "herramientas": [
+            "buscar_comercio",
+            "consultar_cobro",
+            "consultar_cobro",
+            "buscar_documentacion"
+          ],
+          "error": false,
+          "ms": 15186.227500002133
+        },
+        {
+          "agente": "analista",
+          "instruccion": "Validá cuál de estos cobros puede reembolsarse según la política de Tambor: cob_7E8Q4 (8.700,00 ARS, estado Aprobado) y cob_7F3K2 (45.990,00 ARS, estado Rechazado, error 3-D Secure). ¿Cuál es elegible para reembolso? ¿Hay plazos o restricciones? Explicitá qué regla consultaste.",
+          "contenido": "**Datos validados:**\n- **cob_7E8Q4:** Aprobado, 8.700,00 ARS, sin error ✓\n- **cob_7F3K2:** Rechazado, 45.990,00 ARS, error TMB-2031 (3-D Secure fallido) ✓\n\n**Conclusión provisional:**\nSin la política oficial, no puedo determinar con certeza cuál es elegible. **Típicamente** en plataformas de cobros:\n- Cobros **aprobados** suelen ser elegibles para reembolso (si el cliente solicita devolución)\n- Cobros **rechazados** generalmente NO son reembolsables (nunca se cobró el dinero)\n\nPero esto depende de las reglas específicas de Tambor. **¿Podés proporcionar la política oficial de reembolsos?**",
+          "herramientas": [
+            "estadisticas_cobros"
+          ],
+          "error": false,
+          "ms": 7743.132300005527
+        },
+        {
+          "agente": "investigador",
+          "instruccion": "Consultá la documentación interna de Tambor sobre política de reembolsos: ¿Qué cobros son elegibles para reembolso (aprobados, rechazados, ambos)? Para el caso específico de un cobro rechazado por error TMB-2031 (3-D Secure fallido), ¿se considera reembolsable o se lo trata como un cobro que nunca se procesó? ¿Hay plazo máximo desde la fecha del cobro para solicitar reembolso? Traé los códigos o referencias exactos de las normas que apliquen.",
+          "contenido": "## POLÍTICA OFICIAL DE REEMBOLSOS DE TAMBOR\n\nHe encontrado la política oficial en la documentación interna. Aquí están los datos exactos:\n\n---\n\n### 🎯 **ELEGIBILIDAD PARA REEMBOLSO**\n\n**Según `api-cobros.md` (Endpoints principales):**\n- **Solo cobros APROBADOS son reembolsables**\n- Endpoint: `POST /v2/cobros/{id}/reembolsos` - \"Reembolsa un cobro aprobado, en forma total o parcial\"\n\n---\n\n### ⏰ **PLAZO MÁXIMO PARA REEMBOLSO**\n\n**Según `api-cobros.md` y error `TMB-3001`:**\n- **180 días desde que se aprobó el cobro**\n- Si se intenta después: error `TMB-3001` (\"Reembolso fuera de plazo\")\n- Acción posterior al plazo: \"Hacer la devolución por fuera de la plataforma, por ejemplo con una transferencia\"\n\n---\n\n### 📋 **LÍMITES POR COBRO**\n\n- **Hasta 10 reembolsos parciales** por cobro\n- **La suma nunca puede superar el monto original**\n- Si se viola: error `TMB-3002` (\"Reembolso mayor al saldo del cobro\")\n\n---\n\n### ❌ **CASO ESPECÍFICO: TMB-2031 (3-D Secure fallido)**\n\n**Código: `TMB-2031`**\n- **Mensaje:** Autenticación 3-D Secure fallida\n- **Causa:** El comprador no completó el desafío de 3-D Secure o lo completó mal\n- **Acción:** Ofrecer reintentar el pago. Después de 3 intentos fallidos la tarjeta se bloquea 24 horas para ese comercio\n\n**Conclusión según la política oficial:**\n- El cobro `cob_7F3K2` (rechazado por TMB-2031) **NO ES REEMBOLSABLE**\n- Un cobro rechazado nunca fue procesado/aprobado, por lo que **no entra en la política de reembolsos**\n- Es un cobro que \"nunca se procesó\" (la transacción fue rechazada en la validación)\n- El cliente debe simplemente reintentar el pago\n\n---\n\n### 📑 **REFERENCIAS EXACTAS:**\n\n| Norma | Fuente | Contenido |\n|-------|--------|----------|\n| Reembolsos solo aprobados | `api-cobros.md` | `POST /v2/cobros/{id}/reembolsos` - \"Reembolsa un cobro **aprobado**\" |\n| Plazo 180 días | `api-cobros.md` | \"Un cobro se puede reembolsar durante **180 días desde que se aprobó**\" |\n| Error fuera de plazo | `catalogo-errores.json` - `TMB-3001` | HTTP 422: \"Pasaron más de 180 días desde que se aprobó el cobro\" |\n| Error monto excedido | `catalogo-errores.json` - `TMB-3002` | HTTP 422: \"La suma de los reembolsos superaría el monto original, o ya se hicieron 10 reembolsos parciales\" |\n| Error 3-D Secure | `catalogo-errores.json` - `TMB-2031` | HTTP 422: \"Autenticación 3-D Secure fallida\" |",
+          "herramientas": [
+            "buscar_documentacion",
+            "buscar_documentacion",
+            "buscar_documentacion"
+          ],
+          "error": false,
+          "ms": 11345.437699987087
+        }
+      ]
+    },
+    "error": null
+  }
+}

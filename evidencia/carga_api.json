@@ -1,0 +1,63 @@
+{
+  "s_total": 46.7,
+  "pedidos": [
+    {
+      "job_id": "a3a3fa8ae03b4724b9a1008603133a94",
+      "pedido": "Analizá los últimos 5 cobros de Ferretería López: qué porcentaje se rechazó y qué tiene que hacer el comercio con cada código de error.",
+      "estado": "DONE",
+      "ms_post": 1070.9,
+      "s_total": 46.7,
+      "agentes": [
+        "investigador",
+        "analista"
+      ],
+      "respuesta": "# RESPUESTA - EQUIPO DE ATENCIÓN A COMERCIOS\n\n**Cliente:** Ferretería López\n\n---\n\n## RESULTADO DEL ANÁLISIS\n\n**Porcentaje de cobros rechazados: 20,0%** (1 de 5 cobros)\n\n---\n\n## DETALLE DE LOS ÚLTIMOS 5 COBROS\n\n| ID Cobro | Monto | Estado | Código Error |\n|----------|-------|--------|--------------|\n| cob_7F3K2 | 45.990,00 ARS | **Rechazado** | TMB-2031 |\n| cob_7F1A9 | 12.500,00 ARS | En revisión | TMB-2012 |\n| cob_7E8Q4 | 8.700,00 ARS | Aprobado | — |\n| cob_7E2M7 | 23.100,00 ARS | Aprobado | — |\n| cob_7D9X1 | 159.000,00 ARS | Reembolsado | — |\n\n---\n\n## ACCIONES POR CÓDIGO DE ERROR\n\n**TMB-2031** (cob_7F3K2 - Rechazado)\n- El comprador no completó o falló la autenticación 3-D Secure\n- **Acción:** Ofrecer reintentar el pago\n- ⚠️ Después de 3 intentos fallidos, la tarjeta se bloquea 24 horas\n\n**TMB-2012** (cob_7F1A9 - En revisión)\n- El adquirente no respondió en tiempo. El estado real es incierto\n- **Acción:** NO crear un cobro nuevo. Consultar estado con `GET /v2/cobros/{id}`\n- Tambor resuelve el estado final en máximo 2 horas"
+    },
+    {
+      "job_id": "2ba5bd9f9afc42c5a90ee3cb3dc58823",
+      "pedido": "Compará la tasa de rechazo de Librería Andina y Café del Puerto. ¿Cuál está peor y por qué?",
+      "estado": "DONE",
+      "ms_post": 1041.2,
+      "s_total": 45.6,
+      "agentes": [
+        "investigador",
+        "analista"
+      ],
+      "respuesta": "**RESPUESTA - Equipo de Atención a Comercios de Tambor**\n\n---\n\n**Comparación de tasas de rechazo:**\n\nAmbos comercios tienen la misma tasa: **33%** (1 rechazo de 3 cobros intentados).\n\n- **Librería Andina (ID: 101):** 1 rechazo con código `TMB-2004` (Fondos insuficientes) | Cobro `cob_7F0C3`\n- **Café del Puerto (ID: 103):** 1 rechazo con código `TMB-1009` (Conflicto de idempotencia) | Cobro `cob_7F3N4`\n\n**¿Quién está peor?**\n\n**Café del Puerto está en peor situación.** Aunque las tasas son iguales, la causa es diferente:\n\n- **Librería Andina:** El rechazo es por falta de fondos del cliente (responsabilidad del comprador). Es terminal y no genera carga operativa.\n- **Café del Puerto:** El rechazo es por error de integración técnica del comercio (reutilización incorrecta de claves de idempotencia). Esto indica un defecto sistémico que se repetirá si no se corrige, requiere intervención técnica inmediata y afecta la confiabilidad operativa.\n\n**Recomendación:** Contactar a Café del Puerto para que revise su implementación de Idempotency-Key en la API y genere nuevas claves por cada operación distinta."
+    },
+    {
+      "job_id": "73124c9ff81541eeb324d135082ac19f",
+      "pedido": "¿Cuánto cobró en total Café del Puerto en sus últimos 5 cobros aprobados?",
+      "estado": "DONE",
+      "ms_post": 1042.8,
+      "s_total": 25.6,
+      "agentes": [
+        "investigador",
+        "analista"
+      ],
+      "respuesta": "## Respuesta - Equipo de Atención a Comercios de Tambor\n\n**Comercio:** Café del Puerto (ID: 103)\n\n**Hallazgo:** El sistema registra solo **2 cobros aprobados** para este comercio (no hay 5 como se solicitó).\n\n**Detalle de cobros:**\n- **cob_7F3P0** (2026-10-06): 6.400,00 ARS\n- **cob_7E9T5** (2026-10-04): 11.200,00 ARS\n\n**Total cobrado:** **17.600,00 ARS**"
+    },
+    {
+      "job_id": "4d8495a84684464ab93252729d474f53",
+      "pedido": "¿Qué cobros de Farmacia López Hermanos están en revisión y qué significa su código de error?",
+      "estado": "DONE",
+      "ms_post": 1042.4,
+      "s_total": 19.8,
+      "agentes": [
+        "investigador"
+      ],
+      "respuesta": "**Respuesta para Atención a Comercios - Tambor**\n\nConsultamos la base de cobros de **Farmacia López Hermanos** (ID: 104) y confirmo que **no hay cobros en estado de revisión** en este momento.\n\nEl comercio no presenta cobros pendientes de revisión. Si necesitás información sobre cobros en otros estados o deseas revisar un ID específico, podemos consultarlo."
+    },
+    {
+      "job_id": "fe4b44dc90d3463faca987011e4a3d99",
+      "pedido": "¿Qué dice la documentación sobre el error TMB-2031 y cuántos cobros de Ferretería López lo tienen?",
+      "estado": "DONE",
+      "ms_post": 400.2,
+      "s_total": 17.9,
+      "agentes": [
+        "investigador"
+      ],
+      "respuesta": "# Respuesta - Atención a Comercios Tambor\n\n## Error TMB-2031\n\n**Descripción:** Autenticación 3-D Secure fallida (HTTP 422, servicio payments-worker)\n\n**Causa:** El comprador no completó correctamente el desafío de 3-D Secure.\n\n**Impacto y acción recomendada:** Ofrecer reintentar el pago. Tras 3 intentos fallidos, la tarjeta se bloquea 24 horas para ese comercio.\n\n---\n\n## Cobros de Ferretería López con TMB-2031\n\n**Cantidad:** 1 cobro\n\n- **ID:** cob_7F3K2  \n- **Fecha:** 2026-10-06  \n- **Monto:** 45.990,00 ARS  \n- **Estado:** Rechazado"
+    }
+  ]
+}
