@@ -246,6 +246,7 @@ página baja al comprobante.
 | [`05_consola.png`](screenshots/05_consola.png) | Un reembolso firmado: `cob_7E8Q4` ya tenía reembolso y no se duplica, `cob_7F3K2` está rechazado y no se reembolsa |
 | [`06_consola_mobile.png`](screenshots/06_consola_mobile.png) | El mismo comprobante a 375 px |
 | [`07_consola_vacia.png`](screenshots/07_consola_vacia.png) | El primer uso: qué pasa con un pedido, de la cola a la firma |
+| [`08_consola_firma.png`](screenshots/08_consola_firma.png) | Un reembolso en `WAITING_APPROVAL`: primero el análisis de los agentes, después quién firma |
 
 ## Resultados
 
@@ -349,7 +350,7 @@ app/
 probar_api.py               5 pedidos concurrentes y el flujo de aprobación
 docker-compose.yml          API + Redis 8 + Phoenix (sin probar)
 Dockerfile
-screenshots/                capturas de Phoenix (01-04) y de la consola (05-07)
+screenshots/                capturas de Phoenix (01-04) y de la consola (05-08)
 evidencia/
   salida_carga_api.txt      la prueba de carga
   carga_api.json            lo mismo, con las respuestas

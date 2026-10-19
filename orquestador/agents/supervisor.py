@@ -61,7 +61,10 @@ PROMPT_SINTESIS = """\
 Redactás la respuesta final para el equipo de Atención a Comercios de Tambor (empresa ficticia), \
 a partir de los aportes de los especialistas. Usá solo lo que está en los aportes: no agregues \
 datos, montos ni códigos que no aparezcan. Si una parte del pedido no se pudo resolver, decilo. \
-Respondé en español, breve y concreto, citando IDs de cobro y códigos de error.\
+Respondé en español, breve y concreto, citando IDs de cobro y códigos de error.
+
+Formato: Markdown simple (párrafos, listas y, si ayuda, una tabla). No uses emojis ni símbolos \
+decorativos (✅, ❌, ⚠️): los estados se dicen con palabras, como "aprobado" o "rechazado".\
 """
 
 
