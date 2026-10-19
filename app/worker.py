@@ -20,12 +20,14 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
-from openinference.instrumentation import using_session
+from openinference.instrumentation import using_attributes
+from opentelemetry.trace import Status, StatusCode
 
 from orquestador import RECURSION_LIMIT
 
+from .hitl import detectar_accion
 from .jobs import EstadoJob, Job, JobStore
-from .observability import tracer
+from .observability import anotar_firma, tracer
 
 logger = logging.getLogger(__name__)
 
@@ -50,18 +52,30 @@ async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]
     reanuda = "resume" in mensaje
     entrada = Command(resume=mensaje["resume"]) if reanuda else {"messages": [HumanMessage(job.pedido)]}
     config = {"configurable": {"thread_id": job.id}, "recursion_limit": LIMITE_PASOS}
-    with tracer.start_as_current_span(
-        "job.reanudar" if reanuda else "job", openinference_span_kind="chain"
+    # En Phoenix: sesión = trabajo, etiqueta = tipo de pedido, usuario = quien firmó.
+    atributos = {
+        "session_id": job.id,
+        "tags": ["reembolso" if detectar_accion(job.pedido) else "consulta"],
+        "metadata": {"job_id": job.id},
+    }
+    if reanuda:
+        atributos["user_id"] = mensaje["resume"]["revisor"]
+    with using_attributes(**atributos), tracer.start_as_current_span(
+        "firma" if reanuda else "pedido", openinference_span_kind="chain"
     ) as span:
         span.set_input(mensaje["resume"] if reanuda else job.pedido)
-        span.set_attribute("job.id", job.id)
         final = await asyncio.wait_for(grafo.ainvoke(entrada, config), TIMEOUT_JOB_S)
+        span.set_status(Status(StatusCode.OK))  # si el grafo falla, el span queda en ERROR solo
         if interrupciones := final.get("__interrupt__"):
-            span.set_output("WAITING_APPROVAL")
-            return {"estado": EstadoJob.WAITING_APPROVAL, "aprobacion": interrupciones[0].value}
+            span.set_output("Esperando firma humana")
+            # El id del span viaja con la aprobación para anotar ahí la decisión de quien firme.
+            span_id = format(span.get_span_context().span_id, "016x")
+            return {"estado": EstadoJob.WAITING_APPROVAL, "aprobacion": {**interrupciones[0].value, "span_id": span_id}}
         resultado = _resultado(final)
         span.set_output(resultado["respuesta_final"])
-        return {"estado": EstadoJob.DONE, "resultado": resultado, "aprobacion": None}
+    if reanuda and job.aprobacion and job.aprobacion.get("span_id"):
+        await anotar_firma(job.aprobacion["span_id"], mensaje["resume"])
+    return {"estado": EstadoJob.DONE, "resultado": resultado, "aprobacion": None}
 
 
 async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str, Any]) -> None:
@@ -72,8 +86,7 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
         return
     await store.actualizar(job_id, estado=EstadoJob.RUNNING)
     try:
-        with using_session(job_id):
-            campos = await _ejecutar(grafo, job, mensaje)
+        campos = await _ejecutar(grafo, job, mensaje)
     except Exception as exc:  # cualquier falla, del grafo o después, termina en FAILED y nunca en RUNNING
         logger.exception("[worker] %s falló", job_id)
         error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__

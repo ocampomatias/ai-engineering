@@ -201,12 +201,19 @@ el estado y el monto de cada cobro, y la síntesis lo resume. Después:
 LangGraph: cada nodo, cada llamada al LLM (con tokens, costo y latencia) y cada herramienta quedan
 como un span, sin decorar función por función. Encima de eso:
 
-- El worker abre un span `job` (o `job.reanudar`) por ejecución, con el pedido como entrada y la
-  respuesta como salida.
-- `using_session(job_id)` agrupa las trazas de un trabajo en una sesión de Phoenix: la corrida que
-  se detuvo esperando aprobación y la que la completó quedan juntas.
-- FastAPI traza los requests por su cuenta. Excluí los `GET`: con el polling eran cientos de trazas
-  de ruido.
+- El worker abre un span `pedido` por ejecución (o `firma`, cuando reanuda después de la
+  aprobación), con el pedido como entrada y la respuesta como salida, y lo marca `OK` al terminar.
+- `using_attributes` le pone a cada span la sesión (`job_id`), una etiqueta para filtrar
+  (`reembolso` o `consulta`) y, en la `firma`, quién firmó como usuario. La corrida que se detuvo
+  esperando aprobación y la que la completó quedan juntas en la misma sesión.
+- La decisión humana queda como **anotación** `aprobacion_humana` (tipo `HUMAN`) sobre el span
+  `pedido` que pidió la firma: `aprobado`/`rechazado`, puntaje 1/0, el comentario como explicación
+  y el revisor en metadata. Aparece en la columna de anotaciones de Phoenix y se puede filtrar. Se
+  anota ese span y no el de la `firma` porque, cuando alguien firma, el primero ya llegó a Phoenix
+  (los spans se exportan en lotes). Si Phoenix no responde, el reembolso sigue igual: solo se pierde
+  la anotación.
+- FastAPI traza los requests por su cuenta. Excluí los `GET`, `HEAD` y `OPTIONS`: con el polling y
+  los chequeos de vida eran cientos de trazas de ruido. Quedan `POST /tasks` y `POST /approve`.
 
 | Captura | Qué muestra |
 |---|---|
@@ -234,6 +241,12 @@ framework ni build, servidos por el mismo FastAPI.
   análisis de los agentes y los cobros, y después el formulario con el nombre de quien firma.
   "Aprobar" y "Rechazar" llaman a `POST /tasks/{id}/approve`; un `409` (otra firma llegó antes) se
   muestra y se vuelve a consultar el estado.
+- **El historial de sellos:** cada estado que la consola ve pasar queda asentado con la hora del
+  servidor (en cola, en curso, espera firma, en curso, resuelto). Así un comprobante resuelto cuenta
+  su recorrido aunque se abra días después.
+- **Sin conexión:** si se corta Redis (la red, el DNS o Redis Cloud reiniciando), la API responde
+  `503` con un mensaje claro en vez de un `500`, y la consola muestra la API como caída hasta que
+  vuelve. Me pasó en vivo con un corte de DNS: nada se perdió.
 
 El diseño sigue la idea de un libro de operaciones de back office: papel contable con renglones,
 números en monoespaciada y los estados como sellos de goma que se "estampan" cuando cambian. Las
@@ -241,12 +254,26 @@ animaciones duran menos de 300 ms, mueven solo `transform` y `opacity`, y se apa
 `prefers-reduced-motion`. Funciona en el celular: las columnas se apilan y al tocar un asiento la
 página baja al comprobante.
 
+Antes de entregarla pasó por dos revisiones independientes, hechas por subagentes que no vieron
+cómo se construyó: la del revisor final de [impeccable](https://github.com/pbakaus/impeccable) (contra
+la dirección de diseño y su piso de calidad) y una auditoría visual de 6 pilares con foco en
+responsive y accesibilidad. Probé cuatro anchos (375, 768, 1024 y 1440 px). Lo que encontraron y
+se corrigió:
+
+- con un trabajo en curso, el foco del teclado se perdía cada segundo;
+- el análisis previo a la firma estaba en una caja con scroll que cortaba el texto;
+- en 1024 px el sello le comía el ancho al pedido;
+- bordes de campos debajo del contraste 3:1 (WCAG 1.4.11);
+- un aviso que tapaba el campo de comentario.
+
 | Captura | Qué muestra |
 |---|---|
 | [`05_consola.png`](screenshots/05_consola.png) | Un reembolso firmado: `cob_7E8Q4` ya tenía reembolso y no se duplica, `cob_7F3K2` está rechazado y no se reembolsa |
 | [`06_consola_mobile.png`](screenshots/06_consola_mobile.png) | El mismo comprobante a 375 px |
 | [`07_consola_vacia.png`](screenshots/07_consola_vacia.png) | El primer uso: qué pasa con un pedido, de la cola a la firma |
 | [`08_consola_firma.png`](screenshots/08_consola_firma.png) | Un reembolso en `WAITING_APPROVAL`: primero el análisis de los agentes, después quién firma |
+| [`09_phoenix_firma_anotada.png`](screenshots/09_phoenix_firma_anotada.png) | En Phoenix, filtrado por `name in ('pedido', 'firma')`: los dos spans del reembolso y el promedio de la anotación humana |
+| [`10_phoenix_traza_pedido.png`](screenshots/10_phoenix_traza_pedido.png) | La traza del `pedido`: el árbol de agentes, el costo ($0,05), la anotación `aprobacion_humana` y el `job_id` en metadata |
 
 ## Resultados
 
@@ -318,7 +345,7 @@ lo retoma al arrancar. Con `BLMOVE` y una lista de "en proceso" se podrían reen
 python -m pytest -q tests/test_api.py
 ```
 
-Son 9 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
+Son 12 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
 `InMemorySaver`, y los modelos son los guionados de la pre-entrega 6. La API se prueba por HTTP
 con los workers corriendo. Cubren:
 
@@ -328,9 +355,12 @@ con los workers corriendo. Cubren:
 - `FAILED` cuando falla un nodo y cuando falla algo después del grafo, con el worker vivo después;
 - la aprobación: se detiene, no ejecuta nada antes de aprobar, la segunda aprobación da `409`, solo
   reembolsa el cobro aprobado, y el rechazo no ejecuta nada;
-- el serializador de Redis: el estado vuelve con sus tipos.
+- el serializador de Redis: el estado vuelve con sus tipos;
+- la anotación en Phoenix: la firma queda anotada sobre el span correcto con su etiqueta, y con
+  Phoenix caído el reembolso se completa igual.
+- un corte de Redis: `/health` y `/tasks/{id}` responden `503` con mensaje, no `500`.
 
-Con los de las pre-entregas anteriores son 217:
+Con los de las pre-entregas anteriores son 220:
 
 ```bash
 python -m pytest -q
@@ -350,7 +380,7 @@ app/
 probar_api.py               5 pedidos concurrentes y el flujo de aprobación
 docker-compose.yml          API + Redis 8 + Phoenix (sin probar)
 Dockerfile
-screenshots/                capturas de Phoenix (01-04) y de la consola (05-08)
+screenshots/                capturas de Phoenix (01-04, 09-10) y de la consola (05-08)
 evidencia/
   salida_carga_api.txt      la prueba de carga
   carga_api.json            lo mismo, con las respuestas
@@ -360,7 +390,7 @@ evidencia/
   hitl_api_rechazado.json
   log_api.log               el log de la API durante las pruebas
   grafo_api.mmd             el diagrama del grafo
-tests/test_api.py           9 tests sin API keys
+tests/test_api.py           12 tests sin API keys
 ```
 
 # Pre-entrega 6: orquestador multi-agente con supervisor

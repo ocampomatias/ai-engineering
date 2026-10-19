@@ -11,10 +11,10 @@
   --tinta-3: #5e6963;        /* ayudas, 5:1 sobre papel */
   --renglon: #b9cbd8;        /* renglón azul */
   --renglon-fuerte: #7f9db4;
+  --borde-control: #6d8aa1;  /* bordes de campos y botones: 3:1 sobre papel (WCAG 1.4.11) */
   --regla: #c4524b;          /* doble regla roja de margen */
   --sello: #4b3b8f;          /* tinta violeta de sello */
   --sello-hondo: #3a2d70;
-  --sello-velo: rgba(75, 59, 143, 0.08);
   --azul: #2c5a85;           /* tinta azul: en curso, enlaces */
   --verde: #2d6a4a;          /* tinta verde: resuelto */
   --rojo: #b2332c;           /* tinta roja: falló, rechazado */
@@ -47,6 +47,12 @@ body {
 }
 
 ::selection { background: var(--sello); color: var(--hoja); }
+
+.saltar {
+  position: absolute; left: var(--r3); top: -48px; z-index: 30;
+  padding: var(--r2) var(--r3); background: var(--sello); color: var(--hoja); font-weight: 600;
+}
+.saltar:focus { top: var(--r2); }
 
 :focus-visible {
   outline: 2px solid var(--sello);
@@ -141,6 +147,9 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .columna {
   border-right: 1px solid var(--renglon-fuerte);
+  position: sticky;
+  top: 56px;
+  height: calc(100dvh - 56px);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -189,7 +198,7 @@ button, input, textarea { font: inherit; color: inherit; }
   min-height: calc(var(--renglon-alto) * 4 + 2px);
   padding: 0 var(--r3);
   resize: vertical;
-  border: 1px solid var(--renglon-fuerte);
+  border: 1px solid var(--borde-control);
   background-color: var(--hoja);
   background-image: repeating-linear-gradient(
     to bottom,
@@ -214,7 +223,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .ejemplo {
   padding: 3px var(--r2);
-  border: 1px dashed var(--renglon-fuerte);
+  border: 1px dashed var(--borde-control);
   background: transparent;
   font-size: 12.5px;
   color: var(--tinta-2);
@@ -319,6 +328,8 @@ button, input, textarea { font: inherit; color: inherit; }
   position: relative;
   transition: background-color 160ms ease;
 }
+
+.fila:focus-visible { outline-offset: -2px; }
 
 /* Margen rojo del libro: una regla doble de 1px, a la altura del número. */
 .fila::before {
@@ -450,6 +461,25 @@ button, input, textarea { font: inherit; color: inherit; }
   position: relative;
 }
 
+/* La doble regla roja de margen, como en la hoja de un libro contable. */
+.comprobante::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 13px;
+  width: 3px;
+  border-left: 1px solid var(--regla);
+  border-right: 1px solid var(--regla);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.comprobante--vacio::before { display: none; }
+
+.historial { display: flex; flex-wrap: wrap; align-items: center; gap: var(--r2) var(--r4); margin: var(--r4) 0 0; padding: 0; list-style: none; }
+.historial li { display: inline-flex; align-items: center; gap: 6px; }
+.historial time { font: 12px var(--f-num); color: var(--tinta-3); }
+.historial .sello { transform: none; }
+.historial .sello::after { display: none; } /* historia: nada corre acá */
+
 .comprobante--abriendo { animation: abrir 200ms var(--ease-out); }
 
 @keyframes abrir {
@@ -458,10 +488,8 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 .comprobante__cabeza {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--r5);
-  align-items: start;
+  /* El sello flota arriba a la derecha y el texto lo rodea: nunca lo pisa, en ningún ancho. */
+  display: flow-root;
   padding-bottom: var(--r5);
   border-bottom: 3px double var(--regla);
 }
@@ -487,7 +515,7 @@ button, input, textarea { font: inherit; color: inherit; }
   text-wrap: pretty;
 }
 
-.comprobante__sello-lugar { padding-top: 6px; }
+.comprobante__sello-lugar { float: right; margin: 0 0 var(--r3) var(--r4); padding-top: 6px; }
 
 .datos {
   display: grid;
@@ -504,12 +532,16 @@ button, input, textarea { font: inherit; color: inherit; }
 .copiar {
   border: 0;
   background: none;
+  min-width: 24px;
+  min-height: 24px;
   padding: 0 0 0 4px;
   color: var(--tinta-3);
   cursor: pointer;
   vertical-align: -1px;
 }
-.copiar:hover { color: var(--sello); }
+@media (hover: hover) and (pointer: fine) {
+  .copiar:hover { color: var(--sello); }
+}
 
 /* Secciones del comprobante */
 
@@ -526,7 +558,8 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* Respuesta en markdown */
 
-.prosa { font-size: 15px; line-height: 1.6; max-width: 72ch; }
+.prosa { font-size: 15px; line-height: 1.6; max-width: 72ch; text-wrap: pretty; }
+.prosa :is(h1, h2, h3, h4), .vacio__titulo, .firma__pregunta { text-wrap: balance; }
 .prosa > :first-child { margin-top: 0; }
 .prosa h1, .prosa h2, .prosa h3, .prosa h4 { font-size: 15.5px; font-weight: 700; margin: 1.4em 0 0.4em; letter-spacing: 0; }
 .prosa p, .prosa ul, .prosa ol { margin: 0 0 0.8em; }
@@ -558,7 +591,7 @@ button, input, textarea { font: inherit; color: inherit; }
   color: var(--tinta-2);
   padding-top: 2px;
 }
-.paso[data-agente="supervisor"] .paso__quien { color: var(--sello); }
+.paso[data-agente="supervisor"] .paso__quien { color: var(--tinta); font-weight: 750; }
 
 .paso__que { min-width: 0; font-size: 14px; }
 .paso__que p { margin: 0; }
@@ -587,7 +620,6 @@ details.desplegable .prosa { font-size: 13.5px; }
   outline: 1px solid var(--sello);
   outline-offset: 3px;
   padding: var(--r5);
-  background: var(--sello-velo);
 }
 
 .firma__titulo { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.015em; color: var(--sello-hondo); }
@@ -596,18 +628,9 @@ details.desplegable .prosa { font-size: 13.5px; }
 .firma__cobros { display: flex; flex-wrap: wrap; gap: var(--r2); margin: var(--r3) 0 0; padding: 0; list-style: none; }
 .firma__cobros li { font: 13px var(--f-num); padding: 3px 8px; background: var(--hoja); border: 1px solid var(--sello); }
 
-.firma__analisis {
-  margin-top: var(--r4);
-  max-height: 280px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: var(--r3) var(--r4);
-  background: var(--hoja);
-  border: 1px solid var(--renglon-fuerte);
-}
-.firma__analisis:focus-visible { outline: 2px solid var(--sello); outline-offset: 2px; }
-.firma__analisis .prosa { font-size: 13.5px; }
-.firma__subtitulo { margin: 0 0 var(--r2); font-size: 14px; font-weight: 700; color: var(--tinta); }
+/* El análisis se lee entero antes de firmar: sin caja ni scroll propio. */
+.firma__analisis { margin-top: var(--r4); padding-top: var(--r4); border-top: 1px solid var(--renglon); }
+.firma__analisis .prosa { font-size: 14px; }
 
 .firma__form { margin-top: var(--r5); display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: var(--r3) var(--r4); }
 
@@ -616,7 +639,7 @@ details.desplegable .prosa { font-size: 13.5px; }
 .campo__entrada {
   height: 40px;
   padding: 0 var(--r3);
-  border: 1px solid var(--renglon-fuerte);
+  border: 1px solid var(--borde-control);
   background: var(--hoja);
   font-size: 14.5px;
   caret-color: var(--sello);
@@ -698,11 +721,13 @@ details.desplegable .prosa { font-size: 13.5px; }
   font-size: 14px;
 }
 .vacio__pasos .sello { justify-self: start; }
-.vacio__pasos .sello::after { animation: none; } /* leyenda: nada está corriendo de verdad */
+.vacio__pasos .sello { transform: none; }
+.vacio__pasos .sello::after { display: none; } /* leyenda: nada está corriendo de verdad */
 
 .aviso-toast {
   position: fixed;
-  right: var(--r5);
+  /* Al pie de la columna del libro: no pisa el sello grande ni la firma, que viven en la hoja. */
+  left: var(--r5);
   bottom: var(--r5);
   z-index: 20;
   max-width: 360px;
@@ -719,7 +744,7 @@ details.desplegable .prosa { font-size: 13.5px; }
 
 @media (max-width: 960px) {
   .mesa { grid-template-columns: 1fr; }
-  .columna { border-right: 0; }
+  .columna { border-right: 0; position: static; height: auto; }
   .libro__filas { max-height: 320px; }
   .hoja { padding: var(--r4) var(--r4) var(--r6); border-top: 1px solid var(--renglon-fuerte); }
   .comprobante { padding: var(--r5); }
@@ -734,9 +759,8 @@ details.desplegable .prosa { font-size: 13.5px; }
   .boleta { padding: var(--r4); }
   .fila { padding-left: var(--r4); padding-right: var(--r4); grid-template-columns: 40px minmax(0, 1fr) auto; }
   .fila::before { left: calc(var(--r4) + 40px + 5px); }
-  .comprobante__cabeza { grid-template-columns: 1fr; }
-  .comprobante__sello-lugar { order: -1; }
-  .comprobante__pedido { font-size: 17px; }
+  .aviso-toast { left: var(--r4); right: var(--r4); max-width: none; }
+  .comprobante__pedido { font-size: 17px; clear: right; }  /* a este ancho, rodear el sello deja una primera línea huérfana */
   .paso { grid-template-columns: 1fr auto; }
   .paso__quien { grid-column: 1 / -1; }
   .firma__form { grid-template-columns: 1fr; }

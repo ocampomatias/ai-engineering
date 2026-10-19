@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;600&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="/static/consola.css">
+  <link rel="stylesheet" href="/static/consola.css?v=4">
 </head>
 <body>
 <!--
@@ -21,6 +21,7 @@ FIRST VIEWPORT: barra de 56px con marca, salud de la API y enlace a Phoenix. Izq
 FORM: libro de operaciones y sello, candidato 3 de 7, seed 5c5d7803.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 -->
+  <a class="saltar" href="#pedido">Ir a la nueva orden</a>
   <header class="barra">
     <div class="marca">
       <span class="marca__sello" aria-hidden="true">T</span>
@@ -46,7 +47,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
           <span class="boleta__nro" id="proximo-nro">Nº 0001</span>
         </div>
         <label class="campo__etiqueta" for="pedido">Pedido al equipo de agentes</label>
-        <textarea class="boleta__texto" id="pedido" name="pedido" rows="4" minlength="5" maxlength="2000" required
+        <textarea class="boleta__texto" id="pedido" name="pedido" rows="4" minlength="5" maxlength="2000" required aria-describedby="pedido-error contador"
           placeholder="Ej.: Analizá los últimos 5 cobros de Ferretería López"></textarea>
         <p class="campo__error" id="pedido-error" role="alert" hidden></p>
         <div class="ejemplos" role="group" aria-label="Pedidos de ejemplo">
@@ -76,6 +77,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <main class="hoja" id="hoja" tabindex="-1"></main>
   </div>
 
+  <div id="toast" class="aviso-toast" role="status" data-oculto="true"></div>
+
   <template id="tpl-vacio">
     <article class="comprobante comprobante--vacio">
       <h2 class="vacio__titulo">Ningún comprobante abierto</h2>
@@ -91,6 +94,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
-  <script src="/static/consola.js" defer></script>
+  <script src="/static/consola.js?v=4" defer></script>
 </body>
 </html>

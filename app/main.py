@@ -24,10 +24,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
+from redis.exceptions import ConnectionError as RedisCaido
+from redis.exceptions import TimeoutError as RedisLento
 
 from .hitl import router as router_hitl
 from .jobs import Job, JobStore
@@ -106,11 +108,23 @@ def crear_app(
         title="Tambor: orquestador multi-agente",
         version="7.0.0",
         lifespan=lifespan,
-        # FastAPI traza cada request en Phoenix. Los GET de polling serían cientos de trazas de
-        # ruido: quedan POST /tasks y POST /approve, que muestran la latencia de la API.
-        telemetry={"exclude": lambda scope: scope.get("method") == "GET"},
+        # FastAPI traza cada request en Phoenix. Los GET de polling (y los HEAD de los chequeos de
+        # vida) serían cientos de trazas de ruido: quedan POST /tasks y POST /approve.
+        telemetry={"exclude": lambda scope: scope.get("method") in {"GET", "HEAD", "OPTIONS"}},
     )
     app.include_router(router_hitl)
+
+    # Si se corta la conexión con Redis (red, DNS, Redis Cloud reiniciando), 503 con un mensaje
+    # claro en vez de un 500 opaco. El cliente puede reintentar; nada se perdió.
+    @app.exception_handler(RedisCaido)
+    @app.exception_handler(RedisLento)
+    async def sin_redis(request: Request, exc: Exception) -> JSONResponse:
+        logger.warning("Sin conexión con Redis en %s %s: %s", request.method, request.url.path, exc)
+        return JSONResponse(
+            {"detail": "No hay conexión con Redis. Reintentá en unos segundos."},
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
     app.mount("/static", StaticFiles(directory=ESTATICOS), name="static")
 
     @app.get("/", include_in_schema=False)

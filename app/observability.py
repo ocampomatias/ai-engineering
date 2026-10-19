@@ -3,9 +3,12 @@
 - `LangChainInstrumentor` instrumenta LangChain y LangGraph: cada nodo del grafo,
   cada llamada al LLM (con tokens, latencia y costo) y cada herramienta queda
   como un span, sin decorar función por función.
-- El worker abre un span `job` por cada ejecución (ver `tracer`) y lo marca con
-  `using_session(job_id)`: en Phoenix, la corrida que se frenó esperando
+- El worker abre un span `pedido` (o `firma`, al reanudar) por cada ejecución y lo
+  marca con la sesión (`job_id`), una etiqueta (`reembolso` o `consulta`) y, en la
+  firma, quién firmó como usuario. En Phoenix, la corrida que se frenó esperando
   aprobación y la que la reanudó quedan juntas en la misma sesión.
+- La decisión humana queda como anotación `aprobacion_humana` (HUMAN) sobre el
+  span que pidió la firma: aparece en la columna de anotaciones y se puede filtrar.
 
 Por defecto manda a un Phoenix local (`phoenix serve`, http://localhost:6006).
 Para Phoenix Cloud alcanza con PHOENIX_COLLECTOR_ENDPOINT y PHOENIX_API_KEY en el
@@ -23,6 +26,9 @@ from opentelemetry.sdk.trace import TracerProvider
 
 logger = logging.getLogger(__name__)
 
+#: Cliente de Phoenix para anotar; None si las trazas están apagadas.
+_cliente = None
+
 #: Tracer de la app. Mientras no se llame a `iniciar_trazas`, los spans no van a ningún lado.
 tracer = OITracer(trace.get_tracer("tambor.api"), config=TraceConfig())
 
@@ -31,7 +37,9 @@ def iniciar_trazas() -> TracerProvider | None:
     if os.getenv("PHOENIX_DISABLED", "").lower() in {"1", "true"}:
         logger.info("Trazas desactivadas (PHOENIX_DISABLED).")
         return None
-    from phoenix.otel import register  # import acá: los tests no lo necesitan
+    global _cliente
+    from phoenix.client import AsyncClient  # imports acá: los tests no los necesitan
+    from phoenix.otel import register
 
     proveedor = register(
         project_name=os.getenv("PHOENIX_PROJECT_NAME", "tambor-api"),
@@ -39,8 +47,31 @@ def iniciar_trazas() -> TracerProvider | None:
         verbose=False,
     )
     LangChainInstrumentor().instrument(tracer_provider=proveedor)
+    _cliente = AsyncClient(
+        base_url=os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006"),
+        api_key=os.getenv("PHOENIX_API_KEY"),
+    )
     logger.info("Trazas a Phoenix: %s", os.getenv("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:6006"))
     return proveedor
+
+
+async def anotar_firma(span_id: str, revision: dict) -> None:
+    """Registra en Phoenix la decisión de quien firmó, sobre el span que pidió la firma."""
+    if _cliente is None:
+        return
+    try:
+        await _cliente.spans.add_span_annotation(
+            span_id=span_id,
+            annotation_name="aprobacion_humana",
+            annotator_kind="HUMAN",
+            label="aprobado" if revision["aprobado"] else "rechazado",
+            score=1.0 if revision["aprobado"] else 0.0,
+            explanation=revision.get("comentario") or None,
+            metadata={"revisor": revision["revisor"]},
+            identifier=revision["revisor"],
+        )
+    except Exception:  # Phoenix caído no debe frenar un reembolso ya firmado
+        logger.warning("No se pudo anotar la firma en Phoenix (span %s)", span_id, exc_info=True)
 
 
 def cerrar_trazas(proveedor: TracerProvider | None) -> None:

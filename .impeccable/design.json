@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-18T23:47:02+00:00",
+  "generatedAt": "2026-10-19T00:42:03+00:00",
   "title": "Design System: Tambor · Libro de operaciones",
   "extensions": {
     "colorMeta": {
@@ -154,6 +154,21 @@
           "oklch(95% 0.029 241.4)"
         ]
       },
+      "borde-control": {
+        "role": "neutral",
+        "displayName": "Borde de control",
+        "canonical": "#6d8aa1",
+        "tonalRamp": [
+          "oklch(15% 0.029 242.5)",
+          "oklch(27% 0.048 242.5)",
+          "oklch(39% 0.048 242.5)",
+          "oklch(51% 0.048 242.5)",
+          "oklch(63% 0.048 242.5)",
+          "oklch(75% 0.048 242.5)",
+          "oklch(85% 0.048 242.5)",
+          "oklch(95% 0.029 242.5)"
+        ]
+      },
       "regla": {
         "role": "neutral",
         "displayName": "Regla roja",
@@ -237,7 +252,7 @@
       },
       "headline": {
         "displayName": "Título de documento",
-        "purpose": "Nueva orden, estado vacío y bloque de firma (20–24px)."
+        "purpose": "Nueva orden, estado vacío y bloque de firma (20–24px); los títulos cortan con text-wrap: balance."
       },
       "title": {
         "displayName": "Apartado",
@@ -327,6 +342,11 @@
         "purpose": "Esqueleto de carga mientras el worker trabaja."
       },
       {
+        "name": "aviso",
+        "value": "200ms ease-out: opacidad y translateY(8px)",
+        "purpose": "Entrada y salida del aviso al pie de la columna."
+      },
+      {
         "name": "movimiento-reducido",
         "value": "animaciones a 1ms; el estampado pasa a un fundido de 160ms",
         "purpose": "prefers-reduced-motion: reduce."
@@ -341,7 +361,12 @@
         "name": "telefono",
         "value": "600px"
       }
-    ]
+    ],
+    "layout": {
+      "columna": "sticky bajo la barra (top 56px), alto calc(100dvh - 56px); solo el libro scrollea. Por debajo de 960px pasa a estática.",
+      "aviso": "fixed, 24px a la izquierda y abajo, máx. 360px; por debajo de 600px entre márgenes de 16px.",
+      "cabezaComprobante": "display: flow-root; el sello grande va primero en el DOM y flota a la derecha."
+    }
   },
   "components": [
     {
@@ -364,9 +389,9 @@
       "name": "Campo",
       "kind": "input",
       "refersTo": "input-campo",
-      "description": "Campo de una línea: hoja, borde de renglón fuerte, foco violeta.",
+      "description": "Campo de una línea: hoja, borde de control a 3:1, foco violeta.",
       "html": "<label class=\"ds-campo\"><span>Quién firma</span><input placeholder=\"Tu nombre\"></label>",
-      "css": ".ds-campo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; } .ds-campo span { font-size: 13px; font-weight: 600; color: var(--tinta-2, #4a5650); } .ds-campo input { font: inherit; font-size: 14.5px; height: 40px; padding: 0 12px; border: 1px solid var(--renglon-fuerte, #7f9db4); border-radius: 0; background: var(--hoja, #f8faf4); color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-campo input::placeholder { color: var(--tinta-3, #5e6963); } .ds-campo input:hover { border-color: var(--tinta-3, #5e6963); } .ds-campo input:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
+      "css": ".ds-campo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; } .ds-campo span { font-size: 13px; font-weight: 600; color: var(--tinta-2, #4a5650); } .ds-campo input { font: inherit; font-size: 14.5px; height: 40px; padding: 0 12px; border: 1px solid var(--borde-control, #6d8aa1); border-radius: 0; background: var(--hoja, #f8faf4); color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-campo input::placeholder { color: var(--tinta-3, #5e6963); } .ds-campo input:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
     },
     {
       "name": "Área de texto con renglones",
@@ -374,7 +399,7 @@
       "refersTo": "textarea-boleta",
       "description": "El pedido se escribe sobre renglones de libro contable de 28px.",
       "html": "<textarea class=\"ds-boleta-texto\" rows=\"4\" placeholder=\"Ej.: Analizá los últimos 5 cobros de Ferretería López\"></textarea>",
-      "css": ".ds-boleta-texto { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: block; width: 100%; min-height: 114px; padding: 0 12px; resize: vertical; border: 1px solid var(--renglon-fuerte, #7f9db4); border-radius: 0; background-color: var(--hoja, #f8faf4); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 27px, var(--renglon, #b9cbd8) 27px, var(--renglon, #b9cbd8) 28px); background-attachment: local; line-height: 28px; font-size: 15px; color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-boleta-texto::placeholder { color: var(--tinta-3, #5e6963); } .ds-boleta-texto:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
+      "css": ".ds-boleta-texto { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; display: block; width: 100%; min-height: 114px; padding: 0 12px; resize: vertical; border: 1px solid var(--borde-control, #6d8aa1); border-radius: 0; background-color: var(--hoja, #f8faf4); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 27px, var(--renglon, #b9cbd8) 27px, var(--renglon, #b9cbd8) 28px); background-attachment: local; line-height: 28px; font-size: 15px; color: var(--tinta, #1c2420); caret-color: var(--sello, #4b3b8f); transition: border-color 160ms ease; } .ds-boleta-texto::placeholder { color: var(--tinta-3, #5e6963); } .ds-boleta-texto:focus { outline: none; border-color: var(--sello, #4b3b8f); box-shadow: 0 0 0 1px var(--sello, #4b3b8f); }"
     },
     {
       "name": "Chip de pedido de ejemplo",
@@ -382,7 +407,7 @@
       "refersTo": "chip-ejemplo",
       "description": "Atajo que completa el pedido; borde discontinuo que se vuelve continuo.",
       "html": "<div class=\"ds-ejemplos\"><button class=\"ds-ejemplo\">Rechazos de Ferretería López</button><button class=\"ds-ejemplo ds-ejemplo--firma\">Reembolso con firma</button></div>",
-      "css": ".ds-ejemplos { display: flex; flex-wrap: wrap; gap: 8px; } .ds-ejemplo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; padding: 3px 8px; border: 1px dashed var(--renglon-fuerte, #7f9db4); border-radius: 0; background: transparent; font-size: 12.5px; color: var(--tinta-2, #4a5650); cursor: pointer; transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease; } .ds-ejemplo:hover { border-style: solid; color: var(--tinta, #1c2420); background: var(--hoja, #f8faf4); } .ds-ejemplo:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-ejemplo--firma { border-color: var(--sello, #4b3b8f); color: var(--sello, #4b3b8f); } .ds-ejemplo--firma:hover { color: var(--sello-hondo, #3a2d70); }"
+      "css": ".ds-ejemplos { display: flex; flex-wrap: wrap; gap: 8px; } .ds-ejemplo { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; padding: 3px 8px; border: 1px dashed var(--borde-control, #6d8aa1); border-radius: 0; background: transparent; font-size: 12.5px; color: var(--tinta-2, #4a5650); cursor: pointer; transition: border-color 160ms ease, color 160ms ease, background-color 160ms ease; } .ds-ejemplo:hover { border-style: solid; color: var(--tinta, #1c2420); background: var(--hoja, #f8faf4); } .ds-ejemplo:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; } .ds-ejemplo--firma { border-color: var(--sello, #4b3b8f); color: var(--sello, #4b3b8f); } .ds-ejemplo--firma:hover { color: var(--sello-hondo, #3a2d70); }"
     },
     {
       "name": "Sellos de estado",
@@ -404,9 +429,9 @@
       "name": "Bloque de firma",
       "kind": "card",
       "refersTo": "firma",
-      "description": "Aprobación humana de un reembolso: doble borde violeta y velo de sello.",
-      "html": "<section class=\"ds-firma\"><h3>Hace falta tu firma</h3><p>¿Aprobás reembolsar estos cobros?</p><ul><li>cob_7E8Q4</li><li>cob_7F3K2</li></ul></section>",
-      "css": ".ds-firma { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; border: 1.5px solid var(--sello, #4b3b8f); outline: 1px solid var(--sello, #4b3b8f); outline-offset: 3px; border-radius: 0; padding: 24px; background: rgba(75, 59, 143, 0.08); color: var(--tinta, #1c2420); } .ds-firma h3 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.015em; color: var(--sello-hondo, #3a2d70); } .ds-firma p { margin: 8px 0 0; font-size: 15px; } .ds-firma ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; } .ds-firma li { font: 13px 'JetBrains Mono', ui-monospace, monospace; padding: 3px 8px; background: var(--hoja, #f8faf4); border: 1px solid var(--sello, #4b3b8f); }"
+      "description": "Aprobación humana de un reembolso: doble borde violeta, plana sobre la hoja, análisis completo sin caja.",
+      "html": "<section class=\"ds-firma\"><h3>Hace falta tu firma</h3><p>¿Aprobás reembolsar estos cobros?</p><ul><li>cob_7E8Q4</li><li>cob_7F3K2</li></ul><div class=\"ds-firma__analisis\"><p>El analista encontró dos cobros duplicados del mismo día.</p></div></section>",
+      "css": ".ds-firma { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; border: 1.5px solid var(--sello, #4b3b8f); outline: 1px solid var(--sello, #4b3b8f); outline-offset: 3px; border-radius: 0; padding: 24px; background: transparent; color: var(--tinta, #1c2420); } .ds-firma h3 { margin: 0; font-size: 20px; font-weight: 750; letter-spacing: -0.015em; color: var(--sello-hondo, #3a2d70); } .ds-firma p { margin: 8px 0 0; font-size: 15px; } .ds-firma ul { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; } .ds-firma li { font: 13px 'JetBrains Mono', ui-monospace, monospace; padding: 3px 8px; background: var(--hoja, #f8faf4); border: 1px solid var(--sello, #4b3b8f); } .ds-firma__analisis { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--renglon, #b9cbd8); font-size: 14px; } .ds-firma__analisis p { margin: 0; }"
     },
     {
       "name": "Barra",
@@ -415,23 +440,31 @@
       "description": "Barra fija de 56px: sello de marca, salud de la API y enlace a Phoenix.",
       "html": "<header class=\"ds-barra\"><div class=\"ds-marca\"><span class=\"ds-marca__sello\">T</span><b>Tambor</b><span class=\"ds-marca__libro\">Libro de operaciones</span></div><div class=\"ds-barra__lado\"><span class=\"ds-salud\"><i></i>API y Redis en línea</span><a href=\"#\">Trazas en Phoenix</a></div></header>",
       "css": ".ds-barra { font-family: Archivo, ui-sans-serif, system-ui, sans-serif; height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 24px; background: var(--papel-2, #e2e8da); border-bottom: 1px solid var(--renglon-fuerte, #7f9db4); color: var(--tinta, #1c2420); } .ds-marca { display: flex; align-items: center; gap: 12px; } .ds-marca__sello { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--sello, #4b3b8f); outline: 1px solid var(--sello, #4b3b8f); outline-offset: 2px; color: var(--sello, #4b3b8f); font-weight: 800; font-size: 14px; transform: rotate(-4deg); } .ds-marca b { font-weight: 750; font-size: 18px; letter-spacing: -0.01em; } .ds-marca__libro { color: var(--tinta-2, #4a5650); font-variation-settings: 'wdth' 75; font-weight: 500; font-size: 14px; } .ds-barra__lado { display: flex; align-items: center; gap: 24px; font-size: 13px; } .ds-salud { display: inline-flex; align-items: center; gap: 8px; color: var(--tinta-2, #4a5650); } .ds-salud i { width: 8px; height: 8px; border-radius: 50%; background: var(--verde, #2d6a4a); } .ds-barra a { color: var(--azul, #2c5a85); font-weight: 600; text-underline-offset: 3px; text-decoration-thickness: 1px; } .ds-barra a:hover { text-decoration-thickness: 2px; } .ds-barra a:focus-visible { outline: 2px solid var(--sello, #4b3b8f); outline-offset: 2px; }"
+    },
+    {
+      "name": "Historial de sellos",
+      "kind": "custom",
+      "refersTo": "sello-en-cola",
+      "description": "Los sellos que recibió el comprobante con su hora: derechos y quietos.",
+      "html": "<ol class=\"ds-historial\"><li><span class=\"ds-hsello\" style=\"--t:#5c655f\">En cola</span><time>20:28:31</time></li><li><span class=\"ds-hsello\" style=\"--t:#2c5a85\">En curso</span><time>20:28:32</time></li><li><span class=\"ds-hsello\" style=\"--t:#2d6a4a\">Resuelto</span><time>20:29:54</time></li></ol>",
+      "css": ".ds-historial { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0; padding: 0; list-style: none; font-family: Archivo, ui-sans-serif, system-ui, sans-serif; } .ds-historial li { display: inline-flex; align-items: center; gap: 6px; } .ds-hsello { padding: 2px 7px; border: 1.5px solid var(--t); outline: 1px solid var(--t); outline-offset: 1.5px; color: var(--t); font-size: 10.5px; font-weight: 700; font-variation-settings: 'wdth' 85; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; } .ds-historial time { font: 12px 'JetBrains Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: var(--tinta-3, #5e6963); }"
     }
   ],
   "narrative": {
     "northStar": "El libro de operaciones y el sello",
-    "overview": "La consola es el libro de un back office de cobros. Cada pedido a la API es un comprobante numerado que se asienta en un libro de renglones azules y recibe sellos de goma a medida que cambia de estado. El papel es contable, verde pálido; la tinta es verde-negra; y hay una sola tinta de acento, el violeta de los sellos, que marca lo que pide una mano humana: encolar, firmar, decidir.\n\nLa densidad es la de una planilla de oficina, no la de un panel de marketing: líneas de 1px en lugar de tarjetas, números en monoespaciada tabular, encabezados en Archivo condensado. La jerarquía la dan el ancho de la letra, el peso y las reglas (renglón azul, doble regla roja de margen), no los fondos de color ni las sombras. La única hoja que se levanta del papel es el comprobante abierto.\n\nRechazos confirmados por el contrato de dirección: el panel SaaS de tarjetas redondeadas y el chat de burbujas. La respuesta del sistema se lee como un asiento, no como un mensaje.",
+    "overview": "La consola es el libro de un back office de cobros. Cada pedido a la API es un comprobante numerado que se asienta en un libro de renglones azules y recibe sellos de goma a medida que cambia de estado. El papel es contable, verde pálido; la tinta es verde-negra; y hay una sola tinta de acento, el violeta de los sellos, que marca lo que pide una mano humana: encolar, firmar, decidir.\n\nLa densidad es la de una planilla de oficina, no la de un panel de marketing: líneas de 1px en lugar de tarjetas, números en monoespaciada tabular, encabezados en Archivo condensado. La jerarquía la dan el ancho de la letra, el peso y las reglas (renglón azul, doble regla roja de margen), no los fondos de color ni las sombras. La única hoja que se levanta del papel es el comprobante abierto, y lleva su propio margen rojo doble como cualquier hoja de libro.\n\nRechazos confirmados por el contrato de dirección: el panel SaaS de tarjetas redondeadas y el chat de burbujas. La respuesta del sistema se lee como un asiento, no como un mensaje.",
     "keyCharacteristics": [
       "Papel verde pálido en tres capas (papel, papel-2, hoja) y tinta verde-negra en tres intensidades.",
       "Una sola tinta de acento: violeta de sello, reservada a la acción y a la firma.",
       "Estados como sellos de goma de doble borde, cada uno con su tinta, nunca como badges redondeados.",
       "Cero radios en toda superficie y control.",
       "Archivo variable en anchos condensados para rótulos; JetBrains Mono tabular para todo lo que es número o ID.",
-      "Doble regla roja que separa la cabeza del cuerpo de cada documento."
+      "Doble regla roja: horizontal entre la cabeza y el cuerpo de cada documento, vertical como margen del libro y del comprobante."
     ],
     "rules": [
       {
         "name": "La Regla de la Tinta Única",
-        "body": "El violeta de sello es el único acento. Aparece donde hay una acción o una decisión humana, y en ningún otro lugar. Si una pantalla nueva necesita \"un color para destacar\", la respuesta es peso o ancho tipográfico, no otra tinta.",
+        "body": "El violeta de sello es el único acento. Aparece donde hay una acción o una decisión humana, y en ningún otro lugar: ni como velo de fondo ni como color de rótulo. Si una pantalla nueva necesita \"un color para destacar\", la respuesta es peso o ancho tipográfico, no otra tinta.",
         "section": "colors"
       },
       {
@@ -441,7 +474,12 @@
       },
       {
         "name": "La Regla de la Regla Roja",
-        "body": "El rojo de margen (#c4524b) y el rojo de error (#b2332c) son tintas distintas. La regla es papelería: separa cabeza de cuerpo. El rojo de error es un dato. No se intercambian.",
+        "body": "El rojo de margen (#c4524b) y el rojo de error (#b2332c) son tintas distintas. La regla es papelería: separa cabeza de cuerpo y marca el margen. El rojo de error es un dato. No se intercambian.",
+        "section": "colors"
+      },
+      {
+        "name": "La Regla del Borde que se Toca",
+        "body": "Lo que se puede tocar lleva borde de control (#6d8aa1, 3:1); lo que solo estructura lleva renglón fuerte. Un control nuevo nunca hereda el borde de una superficie.",
         "section": "colors"
       },
       {
@@ -455,6 +493,11 @@
         "section": "typography"
       },
       {
+        "name": "La Regla del Rótulo en Tinta",
+        "body": "Un rótulo se destaca con peso, no con color: el supervisor se distingue de los otros agentes por ir en tinta plena a 750, no en violeta.",
+        "section": "typography"
+      },
+      {
         "name": "La Regla de la Hoja Única",
         "body": "Una sola cosa por pantalla se levanta del papel: el documento que se está leyendo. Filas, campos, boleta, firma y sellos quedan planos y se separan con líneas.",
         "section": "elevation"
@@ -465,8 +508,13 @@
         "section": "shapes"
       },
       {
-        "name": "La Regla del Sello Derecho en Columna",
-        "body": "Un sello solo se gira cuando está solo. Ocho sellos girados iguales en una lista se leen como patrón decorativo; en el libro van rectos.",
+        "name": "La Regla del Sello Derecho en Serie",
+        "body": "Un sello solo se gira cuando está solo. Varios sellos girados iguales en una lista se leen como patrón decorativo; en el libro, el historial y la leyenda van rectos.",
+        "section": "shapes"
+      },
+      {
+        "name": "La Regla de la Tinta Fresca",
+        "body": "El trazo que corre del sello En curso solo aparece donde el estado es el de ahora (el sello grande y el libro). En el historial y en la leyenda los sellos quedan quietos: ya pasaron o son ejemplo.",
         "section": "shapes"
       }
     ],
@@ -474,18 +522,21 @@
       "**Do** reservar el violeta de sello (#4b3b8f) para acciones y decisiones humanas: botón primario, firma, estado Espera firma, foco.",
       "**Do** mostrar todo estado de trabajo como sello de doble borde con la tinta de su estado, y rellenar solo \"Espera firma\".",
       "**Do** escribir números, IDs, horas y duraciones en JetBrains Mono con cifras tabulares.",
-      "**Do** separar la cabeza de un documento de su cuerpo con la doble regla roja de 3px.",
+      "**Do** separar la cabeza de un documento de su cuerpo con la doble regla roja de 3px, y marcar su margen con la doble regla vertical.",
       "**Do** dividir listas con líneas de 1px en renglón (#b9cbd8) en lugar de cajas o fondos alternados.",
+      "**Do** bordear todo control con borde de control (#6d8aa1) para que llegue a 3:1 sobre el papel.",
       "**Do** condensar los rótulos con el eje de ancho de Archivo (72–85) y dejar la prosa en ancho 100.",
+      "**Do** dejar que el análisis que precede a una firma se lea entero, sin caja ni scroll propio.",
       "**Do** limitar el hover a dispositivos con puntero fino y reducir toda animación a un fundido cuando el usuario pide menos movimiento."
     ],
     "donts": [
       "**Don't** redondear esquinas de superficies, campos, botones, chips ni sellos (radio 0); la luz de salud es el único círculo.",
       "**Don't** convertir los estados de un trabajo en badges tipo píldora ni en puntos de color sueltos (el punto es solo para la salud de la API).",
-      "**Don't** sumar una segunda tinta de acento ni usar el violeta como decoración.",
+      "**Don't** sumar una segunda tinta de acento ni usar el violeta como decoración, velo de fondo o color de rótulo.",
       "**Don't** levantar con sombra nada que no sea el comprobante abierto o el aviso flotante.",
-      "**Don't** girar sellos que están en una columna o lista.",
+      "**Don't** girar sellos que están en una serie, ni dejar correr la tinta fresca en sellos de historial o de ejemplo.",
       "**Don't** usar el rojo de la regla (#c4524b) para texto ni el rojo de error (#b2332c) para reglas.",
+      "**Don't** poner el aviso sobre la hoja, donde tapa el sello grande o la firma.",
       "**Don't** presentar la respuesta del sistema como burbuja de chat ni como grilla de tarjetas: se lee como asiento en un comprobante."
     ]
   }

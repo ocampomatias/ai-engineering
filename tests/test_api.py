@@ -19,10 +19,12 @@ from typing import Any
 import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from test_orquestador import SupervisorGuionado, decision
 
+from app import observability
 from app.graph import construir_grafo, serializador_redis
 from app.hitl import Accion, Revision, detectar_accion
 from app.jobs import COLA, REEMBOLSOS, JobStore
@@ -211,3 +213,60 @@ async def test_aprobar_un_trabajo_que_no_espera_da_409(redis: FakeAsyncRedis) ->
         await esperar(http, job_id, "DONE")
         r = await http.post(f"/tasks/{job_id}/approve", json={"aprobado": True, "revisor": "ana"})
     assert r.status_code == 409
+
+
+class PhoenixFalso:
+    """Hace de `AsyncClient` de Phoenix: guarda las anotaciones, o falla si se le pide."""
+
+    def __init__(self, falla: bool = False) -> None:
+        self.anotaciones: list[dict[str, Any]] = []
+        self.falla = falla
+        self.spans = self
+
+    async def add_span_annotation(self, **kwargs: Any) -> None:  # noqa: ANN401
+        if self.falla:
+            raise httpx.ConnectError("Phoenix no responde")
+        self.anotaciones.append(kwargs)
+
+
+async def test_la_firma_queda_anotada_en_phoenix(redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch) -> None:
+    phoenix = PhoenixFalso()
+    async with cliente(redis) as http:
+        monkeypatch.setattr(observability, "_cliente", phoenix)  # después del lifespan, que lo deja en None
+        r = await http.post("/tasks", json={"pedido": f"Reembolsá {APROBADO}"})
+        job_id = r.json()["id"]
+        job = await esperar(http, job_id, "WAITING_APPROVAL")
+        span_id = job["aprobacion"]["span_id"]
+        revision = {"aprobado": False, "revisor": "ana", "comentario": "no corresponde"}
+        await http.post(f"/tasks/{job_id}/approve", json=revision)
+        await esperar(http, job_id, "DONE", "FAILED")
+    [anotacion] = phoenix.anotaciones
+    assert anotacion["span_id"] == span_id
+    assert anotacion["annotation_name"] == "aprobacion_humana"
+    assert (anotacion["label"], anotacion["score"]) == ("rechazado", 0.0)
+    assert anotacion["explanation"] == "no corresponde"
+
+
+async def test_phoenix_caido_no_frena_la_firma(redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch) -> None:
+    async with cliente(redis) as http:
+        monkeypatch.setattr(observability, "_cliente", PhoenixFalso(falla=True))
+        r = await http.post("/tasks", json={"pedido": f"Reembolsá {APROBADO}"})
+        job_id = r.json()["id"]
+        await esperar(http, job_id, "WAITING_APPROVAL")
+        await http.post(f"/tasks/{job_id}/approve", json={"aprobado": True, "revisor": "ana"})
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert job["estado"] == "DONE"
+    assert list(await redis.hkeys(REEMBOLSOS)) == [APROBADO]
+
+
+async def test_sin_redis_responde_503(redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def corte(*args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        raise RedisConnectionError("getaddrinfo failed")  # como el corte de DNS que vimos en vivo
+
+    async with cliente(redis) as http:
+        monkeypatch.setattr(redis, "execute_command", corte)
+        salud = await http.get("/health")
+        consulta = await http.get("/tasks/cualquiera")
+        monkeypatch.undo()
+    assert salud.status_code == consulta.status_code == 503
+    assert "Redis" in salud.json()["detail"]

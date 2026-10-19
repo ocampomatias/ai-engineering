@@ -96,11 +96,7 @@ function sello(estado, { grande = false, estampar = false } = {}) {
 
 let temporizadorToast;
 function avisar(texto) {
-  let toast = $("#toast");
-  if (!toast) {
-    toast = h("div", { id: "toast", class: "aviso-toast", role: "status", "data-oculto": "true" });
-    document.body.append(toast);
-  }
+  const toast = $("#toast");  // existe desde la carga: un role=status creado al vuelo no se anuncia
   toast.textContent = texto;
   requestAnimationFrame(() => toast.setAttribute("data-oculto", "false"));
   clearTimeout(temporizadorToast);
@@ -130,6 +126,7 @@ async function api(ruta, opciones = {}) {
 
 function renderLibro(nuevoId = null) {
   const lista = $("#filas");
+  const enfocada = document.activeElement?.closest?.("#filas .fila")?.dataset.id;
   lista.replaceChildren(
     ...libro.asientos.map((a) => {
       const job = trabajos.get(a.id);
@@ -145,6 +142,7 @@ function renderLibro(nuevoId = null) {
         h("button", {
           type: "button",
           class: `fila${a.id === nuevoId ? " fila--nueva" : ""}`,
+          "data-id": a.id,
           "aria-current": a.id === seleccionado ? "true" : "false",
           onclick: () => { seleccionar(a.id); mostrarHoja(); },
         },
@@ -158,6 +156,8 @@ function renderLibro(nuevoId = null) {
       );
     }),
   );
+  // Re-render sin perder el lugar del teclado.
+  if (enfocada) lista.querySelector(`[data-id="${enfocada}"]`)?.focus();
   $("#libro-vacio").hidden = libro.asientos.length > 0;
   $("#limpiar").hidden = libro.asientos.length === 0;
   $("#proximo-nro").textContent = nro(libro.proximo);
@@ -202,20 +202,26 @@ function renderHoja({ abrir = false } = {}) {
 }
 
 function cabeza(asiento, job, cambio) {
-  const datos = [["Asentado", job ? hora(job.creado) : "-"]];
+  // Con historial, la hora de cada sello ya dice cuándo se asentó y cuándo cambió.
+  const conHistorial = (asiento.historial || []).length >= 2;
+  const datos = conHistorial ? [] : [["Asentado", job ? hora(job.creado) : "-"]];
   if (job) {
     datos.push([
       FINALES.has(job.estado) ? "Duración" : "Transcurrido",
       FINALES.has(job.estado) ? duracion(job.creado, job.actualizado) : duracion(job.creado),
     ]);
-    datos.push(["Último cambio", hora(job.actualizado)]);
+    if (!conHistorial) datos.push(["Último cambio", hora(job.actualizado)]);
   }
+  // El sello va primero: flota a la derecha (el texto lo rodea) y el estado se lee antes que nada.
   return h("header", { class: "comprobante__cabeza" },
+    h("div", { class: "comprobante__sello-lugar" },
+      job ? sello(job.estado, { grande: true, estampar: cambio }) : null,
+    ),
     h("div", {},
       h("h2", { class: "comprobante__nro" }, nro(asiento.nro)),
       h("p", { class: "comprobante__pedido" }, asiento.pedido),
       h("dl", { class: "datos" },
-        ...datos.map(([k, v]) => h("div", {}, h("dt", {}, k), h("dd", {}, v))),
+        ...datos.map(([k, v]) => h("div", {}, h("dt", {}, k), h("dd", { class: k === "Transcurrido" ? "datos__reloj" : null }, v))),
         h("div", {},
           h("dt", {}, "Trabajo y sesión en Phoenix"),
           h("dd", {},
@@ -230,11 +236,17 @@ function cabeza(asiento, job, cambio) {
           ),
         ),
       ),
-    ),
-    h("div", { class: "comprobante__sello-lugar" },
-      job ? sello(job.estado, { grande: true, estampar: cambio }) : null,
+      historial(asiento),
     ),
   );
+}
+
+// Los sellos que recibió el comprobante, en orden. Solo lo que la consola vio: sin inventar pasos.
+function historial(asiento) {
+  const pasos = asiento.historial || [];
+  if (pasos.length < 2) return null;
+  return h("ol", { class: "historial", "aria-label": "Sellos que recibió" },
+    ...pasos.map((p) => h("li", {}, sello(p.estado), h("time", { datetime: p.t }, hora(p.t)))));
 }
 
 function cuerpo(asiento, job) {
@@ -313,6 +325,7 @@ function firma(job) {
       avisar(aprobado ? "Firmado. El grafo se reanuda y registra el reembolso." : "Rechazado. El grafo termina sin ejecutar nada.");
       renderLibro();
       renderHoja();
+      $("#hoja").focus({ preventScroll: true });  // el botón que tenía el foco ya no existe
       programar(job.id);
     } catch (error) {
       alerta.textContent = error.status === 409
@@ -338,7 +351,7 @@ function firma(job) {
     ),
     h("div", { class: "firma__acciones" },
       h("button", { class: "boton boton--sello", type: "button", onclick: (e) => enviar(true, e.currentTarget) },
-        h("i", { class: "ph ph-seal-check", "aria-hidden": "true" }), h("span", { class: "boton__texto" }, "Aprobar y firmar")),
+        h("span", { class: "boton__texto" }, "Aprobar y firmar"), h("i", { class: "ph ph-seal-check", "aria-hidden": "true" })),
       h("button", { class: "boton boton--rojo", type: "button", onclick: (e) => enviar(false, e.currentTarget) },
         h("span", { class: "boton__texto" }, "Rechazar")),
       h("span", { class: "firma__aviso" }, "Solo se reembolsan cobros aprobados, y nunca dos veces."),
@@ -351,8 +364,7 @@ function firma(job) {
     h("ul", { class: "firma__cobros", "aria-label": "Cobros a reembolsar" },
       ...(ap.accion?.cobro_ids || []).map((c) => h("li", {}, c))),
     // El análisis va antes del formulario: se lee lo que encontraron los agentes y después se decide.
-    h("div", { class: "firma__analisis", tabindex: "0", "aria-label": "Análisis de los agentes" },
-      h("h4", { class: "firma__subtitulo" }, "Lo que encontraron los agentes"),
+    h("section", { class: "firma__analisis", "aria-label": "Lo que encontraron los agentes" },
       prosa(ap.analisis),
     ),
     h("p", { id: "firma-alerta", class: "alerta", role: "alert", hidden: true }),
@@ -431,12 +443,23 @@ function quitar(id) {
 
 const pendientes = new Map(); // id -> timeout
 
+// Cada estado que la consola ve pasar queda en el asiento, con la hora del servidor.
+function anotarEstado(id, estado, t) {
+  const asiento = libro.asientos.find((a) => a.id === id);
+  if (!asiento) return;
+  asiento.historial ??= [];
+  if (asiento.historial.at(-1)?.estado === estado) return;
+  asiento.historial.push({ estado, t });
+  guardarLibro();
+}
+
 async function consultar(id) {
   try {
     const job = await api(`/tasks/${id}`);
     const previo = trabajos.get(id);
     trabajos.set(id, job);
     perdidos.delete(id);
+    anotarEstado(id, job.estado, job.actualizado);
     if (previo && previo.actualizado === job.actualizado && previo.estado === job.estado) {
       programar(id);
       return;
@@ -474,10 +497,16 @@ setInterval(() => {
     return j && !FINALES.has(j.estado);
   });
   if (!vivo) return;
-  renderLibro();
+  // Solo el texto de las filas vivas: rehacer los botones cada segundo le roba el foco al teclado.
+  for (const a of libro.asientos) {
+    const j = trabajos.get(a.id);
+    if (!j || FINALES.has(j.estado)) continue;
+    const meta = document.querySelector(`#filas [data-id="${a.id}"] .fila__meta`);
+    if (meta) meta.textContent = `${hora(j.creado)} · hace ${duracion(j.creado)}`;
+  }
   const job = trabajos.get(seleccionado);
   if (job && !FINALES.has(job.estado) && job.estado !== "WAITING_APPROVAL") {
-    const dd = document.querySelector(".datos div:nth-child(2) dd");
+    const dd = document.querySelector(".datos .datos__reloj");
     if (dd) dd.textContent = duracion(job.creado);
   }
 }, 1000);
@@ -536,6 +565,7 @@ function prepararBoleta() {
       libro.asientos.unshift({ id: job.id, nro: libro.proximo++, pedido, creado: job.creado });
       libro.asientos = libro.asientos.slice(0, 50);
       guardarLibro();
+      anotarEstado(job.id, job.estado, job.creado);
       trabajos.set(job.id, job);
       estadoMostrado.set(job.id, job.estado);
       texto.value = "";
