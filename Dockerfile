@@ -1,4 +1,6 @@
 FROM python:3.12-slim
+# Logs sin buffer: salen en `docker compose logs` al momento.
+ENV PYTHONUNBUFFERED=1
 WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

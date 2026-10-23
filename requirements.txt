@@ -1,47 +1,53 @@
+# Python 3.12+. Versiones fijas (==): las que pasan los tests y el CI en Linux.
+
 # Pre-entrega 1: cliente unificado
-openai>=3.11.0
-anthropic>=1.4.0
-pydantic>=2.13.0
-python-dotenv>=1.2.0
+openai==3.35.1
+anthropic==1.15.0
+pydantic==2.13.5
+python-dotenv==1.2.3
 
 # Pre-entrega 2: pipeline LCEL
-langchain-core>=1.6.3
-langchain-openai>=1.6.2
-langchain-anthropic>=1.7.2
+langchain-core==1.6.3
+langchain-openai==1.6.2
+langchain-anthropic==1.7.2
 
 # Pre-entrega 3: RAG local
-langchain-chroma>=1.1.0
-chromadb>=1.5.9
-langchain-text-splitters>=1.1.2
-tiktoken>=0.14.0
-fastembed>=0.8.0
+langchain-chroma==1.1.0
+chromadb==1.5.9
+langchain-text-splitters==1.1.2
+tiktoken==0.14.0
+fastembed==0.8.0
 
 # Desarrollo (para correr los tests, no hacen falta para usar el cliente)
-pytest>=8.0.0
-pytest-asyncio>=0.24.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
 
 # Pre-entrega 4: RAG escalable en Pinecone
-pinecone>=7.3.0,<8
-langchain-pinecone>=0.2.13
-langchain-community>=0.4.2
-langchain-classic>=1.0.8
-rank-bm25>=0.2.2
-pypdf>=6.0.0
+pinecone==7.3.0
+langchain-pinecone==0.2.13
+langchain-community==0.4.2
+langchain-classic==1.0.8
+rank-bm25==0.2.2
+pypdf==6.19.0
 
 # Pre-entrega 5: agente ReAct con LangGraph
-langgraph>=1.2.14
-langgraph-checkpoint-sqlite>=3.1.1
-aiosqlite>=0.22.1
+langgraph==1.2.14
+# create_react_agent vive acá; fijado porque LangGraph 2.0 lo elimina.
+langgraph-prebuilt==1.1.0
+langgraph-checkpoint-sqlite==3.1.1
+aiosqlite==0.22.1
 
 # Pre-entrega 7: API de producción (FastAPI + Redis + Phoenix)
-fastapi>=0.146.0
-uvicorn>=0.53.0
-httpx>=0.28.1
-redis>=8.1.0
-langgraph-checkpoint-redis>=0.5.2
-arize-phoenix-otel>=0.17.2
-openinference-instrumentation-langchain>=0.1.79
+fastapi==0.146.0
+uvicorn==0.53.0
+httpx==0.28.1
+redis==8.1.0
+langgraph-checkpoint-redis==0.5.2
+arize-phoenix-otel==0.17.2
+# Anotación humana de la firma (phoenix.client.AsyncClient en app/observability.py).
+arize-phoenix-client==3.5.0
+openinference-instrumentation-langchain==0.1.79
 # El servidor de Phoenix (`phoenix serve`). No hace falta si usás Phoenix Cloud o Docker.
-arize-phoenix>=20.23.0
+arize-phoenix==20.23.0
 # Tests de la API (Redis falso en memoria)
-fakeredis>=2.40.0
+fakeredis==2.40.0

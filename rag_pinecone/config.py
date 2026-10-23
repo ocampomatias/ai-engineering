@@ -68,7 +68,10 @@ class ConfigPinecone(BaseModel):
     )
     modelo_embeddings: str = Field(
         default=MODELO_EMBEDDINGS,
-        description="Modelo de embeddings local. El mismo para indexar y para consultar.",
+        description=(
+            "EMBEDDINGS_MODEL. Modelo de embeddings local. El mismo para indexar y para "
+            "consultar: si se cambia, hay que reingestar el índice."
+        ),
     )
     chunk_size: int = Field(
         default=500,
@@ -149,6 +152,7 @@ def cargar_config(env_file: str | Path | None = None, **overrides: object) -> Co
         "namespace": env("PINECONE_NAMESPACE"),
         "cloud": env("PINECONE_CLOUD"),
         "region": env("PINECONE_REGION"),
+        "modelo_embeddings": env("EMBEDDINGS_MODEL"),
     }
     valores = {k: v for k, v in valores.items() if v is not None}
     valores.update(overrides)

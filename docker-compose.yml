@@ -1,12 +1,26 @@
-# API + Redis 8 + Phoenix, todo local:  docker compose up --build
-# La API toma las API keys del .env; REDIS_URL y Phoenix apuntan a los contenedores.
+# API + Redis 8 + Phoenix, todo local:  ./run.sh  (o docker compose up --build con un .env)
+# La API toma las API keys del .env; `environment` pisa REDIS_URL y Phoenix del .env
+# para que apunten a los contenedores.
 services:
   redis:
-    image: redis:8
-    ports: ["6379:6379"]
+    image: redis:8.4.7  # Redis 8 trae Query Engine y JSON, que usa AsyncRedisSaver
+    # Sin puerto publicado: la API lo ve por la red del compose y no choca con un Redis local.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - redis_data:/data
+
   phoenix:
-    image: arizephoenix/phoenix:latest
+    image: arizephoenix/phoenix:version-20.23.0  # el mismo servidor que arize-phoenix 20.23.0 en local
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
     ports: ["6006:6006"]
+    volumes:
+      - phoenix_data:/mnt/data
+
   api:
     build: .
     env_file: .env
@@ -14,4 +28,17 @@ services:
       REDIS_URL: redis://redis:6379
       PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006
     ports: ["8000:8000"]
-    depends_on: [redis, phoenix]
+    depends_on:
+      redis:
+        condition: service_healthy  # el ping del lifespan falla si Redis no está listo
+      phoenix:
+        condition: service_started
+    volumes:
+      # ConfigPinecone.carpeta_cache_modelos = RAIZ/.cache/fastembed; RAIZ es el WORKDIR /srv.
+      # La imagen corre como root, así que puede escribir en el volumen.
+      - modelos:/srv/.cache
+
+volumes:
+  redis_data:
+  phoenix_data:
+  modelos:

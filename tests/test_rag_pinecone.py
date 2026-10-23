@@ -280,6 +280,13 @@ def test_cargar_config_lee_el_entorno(tmp_path: Path, monkeypatch: pytest.Monkey
     assert config.namespace == "otro"
 
 
+def test_cargar_config_lee_el_modelo_de_embeddings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("EMBEDDINGS_MODEL", "otro/modelo")
+    assert cargar_config().modelo_embeddings == "otro/modelo"
+    monkeypatch.delenv("EMBEDDINGS_MODEL")
+    assert cargar_config().modelo_embeddings == "jinaai/jina-embeddings-v2-base-es"
+
+
 def test_config_rechaza_nombre_de_indice_invalido() -> None:
     with pytest.raises(ValidationError):
         ConfigPinecone(indice="Mi_Indice")

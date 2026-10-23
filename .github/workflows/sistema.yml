@@ -1,0 +1,79 @@
+# Valida el sistema en limpio, sin secretos ni gasto: tests en Ubuntu y arranque con Docker Compose.
+name: Sistema
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+      - name: Tests
+        run: python -m pytest -q
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: .env de CI (key falsa, Anthropic responde 401 sin cobrar)
+        run: printf 'LLM_PROVIDER=anthropic\nANTHROPIC_API_KEY=ci-sin-key\n' > .env
+
+      - name: Arranque en una instrucción
+        run: ./run.sh
+
+      - name: Esperar /health (hasta 5 min)
+        run: timeout 300 bash -c 'until curl -fsS localhost:8000/health; do sleep 5; done'
+
+      - name: Consola y OpenAPI
+        run: |
+          curl -fsS localhost:8000/ | grep -q "Libro de operaciones"
+          curl -fsS localhost:8000/openapi.json | jq -e '.paths["/tasks"]' > /dev/null
+
+      - name: Phoenix y módulos de Redis
+        run: |
+          timeout 120 bash -c 'until curl -fsS localhost:6006/healthz; do sleep 3; done'
+          modulos="$(docker compose exec -T redis redis-cli MODULE LIST)"
+          echo "$modulos"
+          grep -qw search <<< "$modulos"
+          grep -qw ReJSON <<< "$modulos"
+
+      - name: Un trabajo recorre cola, worker y checkpointer hasta FAILED por la key falsa
+        run: |
+          id="$(curl -fsS -X POST localhost:8000/tasks -H 'Content-Type: application/json' \
+            -d '{"pedido": "Analizá los últimos 5 cobros de Ferretería López."}' | jq -r .id)"
+          echo "trabajo: $id"
+          for _ in $(seq 60); do
+            job="$(curl -fsS "localhost:8000/tasks/$id")"
+            estado="$(jq -r .estado <<< "$job")"
+            case "$estado" in FAILED|DONE|WAITING_APPROVAL) break ;; esac
+            sleep 3
+          done
+          echo "$job" | jq .
+          # El worker guarda "<TipoDeExcepción>: <mensaje>"; el SDK de Anthropic da AuthenticationError (401).
+          jq -e '.estado == "FAILED" and (.error | test("AuthenticationError|401"))' <<< "$job"
+
+      - name: La traza llegó a Phoenix (proyecto tambor-api)
+        run: |
+          timeout 60 bash -c 'until curl -fsS localhost:6006/v1/projects | jq -e "any(.data[]; .name == \"tambor-api\")"; do sleep 3; done'
+
+      - name: Logs del compose
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Apagar y borrar volúmenes
+        if: always()
+        run: docker compose down -v
