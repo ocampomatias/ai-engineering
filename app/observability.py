@@ -3,7 +3,8 @@
 - `LangChainInstrumentor` instrumenta LangChain y LangGraph: cada nodo del grafo,
   cada llamada al LLM (con tokens, latencia y costo) y cada herramienta queda
   como un span, sin decorar función por función.
-- El worker abre un span `pedido` (o `firma`, al reanudar) por cada ejecución y lo
+- El worker abre un span `pedido` (`firma` al reanudar con la aprobación, `reanudacion`
+  con la etiqueta `recuperado` al retomar tras una caída) por cada ejecución y lo
   marca con la sesión (`job_id`), una etiqueta (`reembolso` o `consulta`) y, en la
   firma, quién firmó como usuario. En Phoenix, la corrida que se frenó esperando
   aprobación y la que la reanudó quedan juntas en la misma sesión.

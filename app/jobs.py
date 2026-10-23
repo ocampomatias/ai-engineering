@@ -3,8 +3,10 @@
 - Cada trabajo es un JSON en `tambor:job:{id}` (con TTL): su estado, el pedido,
   lo que espera aprobación, el resultado o el error.
 - La cola es una lista de Redis (`tambor:cola`): la API hace LPUSH y los
-  workers BRPOP. Como vive en Redis y no en memoria, un trabajo encolado no se
-  pierde si la API se reinicia, y los workers podrían correr en otro proceso.
+  workers BLMOVE hacia `tambor:procesando`. El mensaje sale de "en proceso"
+  (`confirmar`) recién cuando el estado final del trabajo quedó guardado, y al
+  arrancar, `recuperar` devuelve a la cola lo que quedó a medias. Así ni un
+  reinicio ni una caída a mitad de un trabajo pierden el mensaje.
 
 Todo es `redis.asyncio`: ninguna operación bloquea el event loop de FastAPI.
 """
@@ -20,6 +22,7 @@ from redis.asyncio import Redis
 
 PREFIJO = "tambor"
 COLA = f"{PREFIJO}:cola"
+PROCESANDO = f"{PREFIJO}:procesando"
 REEMBOLSOS = f"{PREFIJO}:reembolsos"
 TTL_JOB_S = 7 * 24 * 3600
 
@@ -92,15 +95,34 @@ class JobStore:
             mensaje["resume"] = resume
         await self.redis.lpush(COLA, json.dumps(mensaje))
 
-    async def desencolar(self, timeout_s: float = 2) -> dict[str, Any] | None:
-        """El próximo mensaje de la cola, o None si no llegó nada en `timeout_s`.
+    async def desencolar(self, timeout_s: float = 2) -> tuple[str, dict[str, Any]] | None:
+        """El próximo mensaje `(crudo, mensaje)`, o None si no llegó nada en `timeout_s`.
 
+        BLMOVE lo pasa de la cola a "en proceso" en un solo paso atómico: si el proceso muere
+        antes de `confirmar(crudo)`, el mensaje sigue en Redis y `recuperar` lo devuelve.
         `timeout_s` tiene que quedar bien por debajo del socket_timeout del cliente (5 s por
-        defecto en redis-py). Si el cliente corta la lectura justo cuando Redis ya sacó el
-        mensaje de la lista, el mensaje se pierde: pasaba con 5 s contra Redis Cloud.
+        defecto en redis-py); si el cliente corta justo cuando Redis movió el mensaje, ya no
+        se pierde: queda en "en proceso".
         """
-        item = await self.redis.brpop([COLA], timeout=timeout_s)
-        return json.loads(item[1]) if item else None
+        crudo = await self.redis.blmove(COLA, PROCESANDO, timeout_s, "RIGHT", "LEFT")
+        return (crudo, json.loads(crudo)) if crudo else None
+
+    async def confirmar(self, crudo: str) -> None:
+        """El trabajo terminó y su estado quedó guardado: el mensaje sale de "en proceso"."""
+        await self.redis.lrem(PROCESANDO, 1, crudo)
+
+    async def recuperar(self) -> int:
+        """Devuelve a la cola lo que quedó en "en proceso" (caída o reinicio). Llamar antes de los workers.
+
+        LMOVE LEFT RIGHT los deja en la punta de salida de la cola, en el orden en que habían
+        entrado: se retoman antes que los pedidos nuevos.
+        shortcut: una sola instancia de la API; con dos, esta devolvería a la cola lo que la otra
+        está procesando. Para escalar: una lista "en proceso" por instancia con latido y TTL.
+        """
+        movidos = 0
+        while await self.redis.lmove(PROCESANDO, COLA, "LEFT", "RIGHT"):
+            movidos += 1
+        return movidos
 
     async def tomar_revision(self, job_id: str) -> bool:
         """True solo para la primera revisión de un trabajo: dos aprobaciones a la vez no lo reanudan dos veces."""

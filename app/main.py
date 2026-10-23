@@ -91,6 +91,9 @@ def crear_app(
         try:
             async with fabrica() as recursos:
                 app.state.store = recursos.store
+                # Antes de los workers: lo que quedó a medias por una caída vuelve a la cola.
+                recuperados = await recursos.store.recuperar()
+                logger.info("[recuperación] %d mensaje(s) vuelven a la cola", recuperados)
                 tareas = [
                     asyncio.create_task(correr_worker(recursos.store, recursos.grafo, f"worker-{i}"))
                     for i in range(1, workers + 1)

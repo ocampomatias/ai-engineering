@@ -109,7 +109,7 @@ No hay plata nueva recurrente: después de la entrega nadie usa el sistema.
 
 - **Del repo:** `JobStore` (se le agregan 3 métodos), `worker.procesar` y `_ejecutar` (se reescribe solo cómo se elige la entrada), `ERRORES_TRANSITORIOS` y `ERRORES_REINTENTABLES` de `pipeline/chain.py`, `SupervisorGuionado` y `ModeloGuionado` de los tests, el `cliente()` de `tests/test_api.py` (se le agrega poder pasar el checkpointer y el `redis` compartidos para simular reinicios), y `probar_api.py` (se le agregan p95 y `--reinicio`).
 - **De LangGraph 1.2.14, ya instalado y verificado en `.venv`:** `aget_state` con `StateSnapshot.next` e `.interrupts`, `ainvoke(None, config)`, `durability="sync"`, `RetryPolicy` y el modelo dinámico de `create_react_agent`.
-- **De redis-py y fakeredis:** `blmove` y `lmove` (fakeredis 2.40 los implementa, verificado en `list_mixin.py`).
+- **De redis-py y fakeredis:** `blmove` y `lmove` (fakeredis 2.40 los implementa, verificado en `list_mixin.py`). *Corrección (implementación, 23-oct):* el `blmove` de fakeredis no bloquea (vuelve `None` al instante), así que los tests usan en el fixture un `blmove` que sondea con `LMOVE` cada 10 ms; producción usa el BLMOVE real.
 - **De Phoenix 20.23:** `/healthz` y `GET /v1/projects` existen en el servidor instalado (verificado). El CI los usa.
 - **Arsenal:**
   - `context7`: FastAPI `responses=` y `summary`, Compose `depends_on.condition`, redis-py `blmove`, antes de escribir contra cada librería.
@@ -133,7 +133,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase A: persistencia y recuperación (rúbrica: persistencia 20 %; consigna 3; corrección PE7 b)
 
-1. [ ] **Cola confiable.** En `app/jobs.py`:
+1. [x] **Cola confiable.** En `app/jobs.py`:
    - nueva constante `PROCESANDO = "tambor:procesando"`;
    - `desencolar()` usa `BLMOVE COLA PROCESANDO RIGHT LEFT` (mismo timeout de 2 s) y devuelve `(crudo, mensaje)`;
    - nuevo `confirmar(crudo)`, que hace `LREM PROCESANDO 1 crudo`;
@@ -142,10 +142,10 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
    En `app/main.py`, el `lifespan` llama a `recuperar()` antes de crear los workers y loguea `[recuperación] N mensaje(s) vuelven a la cola` (sin la URL de Redis). Comentario `shortcut:` en `recuperar` sobre el límite de una sola instancia.
    — verificación: test nuevo en `tests/test_api.py`: un mensaje movido a `procesando` y no confirmado vuelve a la cola al arrancar una app nueva y termina `DONE`; `llen(COLA) == llen(PROCESANDO) == 0` al final de los tests existentes.
 
-2. [ ] **El worker confirma solo después de guardar el estado final** (`app/worker.py`). `correr_worker` desempaqueta `(crudo, mensaje)` y llama a `store.confirmar(crudo)` después de `procesar`. Un `CancelledError` (apagado) no confirma, así que el mensaje se recupera al arrancar. Al empezar `procesar`, si el trabajo está `DONE` o `FAILED`, o está `WAITING_APPROVAL` y el mensaje no trae `resume`, lo descarta, lo loguea y lo confirma.
+2. [x] **El worker confirma solo después de guardar el estado final** (`app/worker.py`). `correr_worker` desempaqueta `(crudo, mensaje)` y llama a `store.confirmar(crudo)` después de `procesar`. Un `CancelledError` (apagado) no confirma, así que el mensaje se recupera al arrancar. Al empezar `procesar`, si el trabajo está `DONE` o `FAILED`, o está `WAITING_APPROVAL` y el mensaje no trae `resume`, lo descarta, lo loguea y lo confirma.
    — verificación: test nuevo: un mensaje duplicado de un trabajo `DONE` no lo vuelve a correr (el modelo guionado registra 0 llamadas nuevas) y el resultado no cambia.
 
-3. [ ] **"El checkpoint decide" + `durability="sync"`** (`app/worker.py: _ejecutar`):
+3. [x] **"El checkpoint decide" + `durability="sync"`** (`app/worker.py: _ejecutar`):
    - `snap = await grafo.aget_state(config)` y la tabla de la decisión 2 (pedido, firma, en espera, reanudación, ya terminado);
    - `ainvoke(..., durability="sync")`;
    - span `reanudacion` con etiqueta `recuperado` y `set_input` con el `next` del checkpoint;
@@ -170,7 +170,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase B: Docker Compose validado y arranque en una instrucción (rúbrica: documentación y despliegue 15 %; consigna 7; corrección PE7 a)
 
-5. [ ] **`docker-compose.yml`:**
+5. [x] **`docker-compose.yml`:**
    - `redis:8.4.7`: healthcheck `redis-cli ping`, volumen `redis_data:/data`, sin puerto publicado en el host (evita choques con un Redis local);
    - `arizephoenix/phoenix:version-20.23.0` con `PHOENIX_WORKING_DIR=/mnt/data` y volumen `phoenix_data`;
    - `api`: `depends_on: redis: condition: service_healthy` y volumen `modelos:/srv/.cache` (el modelo de embeddings se baja una sola vez, en modo Pinecone).
@@ -178,13 +178,13 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
    **`Dockerfile`:** `ENV PYTHONUNBUFFERED=1`, para que los logs salgan en `docker compose logs` al momento. **`.dockerignore`:** sumar `.git`, `.github`, `screenshots`, `evidencia` y `.playwright-mcp`.
    — verificación: `docker compose config` en el CI (la sintaxis) y el paso 7.
 
-6. [ ] **`run.sh`** (unas 8 líneas): si no hay `.env`, lo copia de `.env.example` y termina con el aviso de completar `ANTHROPIC_API_KEY` (y `PINECONE_API_KEY` para el RAG en Pinecone). Si hay, corre `docker compose up --build -d` e imprime las URLs de la consola, `/docs` y Phoenix. Además:
+6. [x] **`run.sh`** (unas 8 líneas): si no hay `.env`, lo copia de `.env.example` y termina con el aviso de completar `ANTHROPIC_API_KEY` (y `PINECONE_API_KEY` para el RAG en Pinecone). Si hay, corre `docker compose up --build -d` e imprime las URLs de la consola, `/docs` y Phoenix. Además:
    - `.gitattributes` con `*.sh text eol=lf`, para que un clon en Windows no lo rompa con CRLF;
    - `git update-index --chmod=+x run.sh`, porque en Windows el bit de ejecución no se guarda solo.
 
    — verificación: `git ls-files -s run.sh` muestra modo `100755`. El CI lo ejecuta en el paso 7.
 
-7. [ ] **`.github/workflows/sistema.yml`**, que corre en `push` a `main` y con `workflow_dispatch`. Dos jobs:
+7. [x] **`.github/workflows/sistema.yml`**, que corre en `push` a `main` y con `workflow_dispatch`. Dos jobs:
    - `tests`: `actions/setup-python` 3.12 con caché de pip, `pip install -r requirements.txt`, `python -m pytest -q`.
    - `compose` (`timeout-minutes: 25`):
      1. escribe `.env` con `LLM_PROVIDER=anthropic` y `ANTHROPIC_API_KEY=ci-sin-key`;
@@ -198,7 +198,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
    — verificación: `gh run watch` en verde. Si algo falla, se corrige con el log del job, sin plata ni keys.
 
-8. [ ] **Probar en local, gratis, que la API arranca con una key falsa:** levantar `uvicorn` con `ANTHROPIC_API_KEY=ci-sin-key` y `LLM_PROVIDER=anthropic` en el entorno de esa terminal (pisan al `.env` porque `load_dotenv` no sobrescribe), contra Redis Cloud, y ver `/health` en 200. No se manda ningún pedido.
+8. [x] *(Cubierto por el CI: run 40039745693 arrancó con `ci-sin-key` y el trabajo llegó a FAILED con 401.)* **Probar en local, gratis, que la API arranca con una key falsa:** levantar `uvicorn` con `ANTHROPIC_API_KEY=ci-sin-key` y `LLM_PROVIDER=anthropic` en el entorno de esa terminal (pisan al `.env` porque `load_dotenv` no sobrescribe), contra Redis Cloud, y ver `/health` en 200. No se manda ningún pedido.
    — verificación: `curl localhost:8000/health` → `{"estado":"ok"}`. Ahorra vueltas de CI si algo del arranque depende de la key.
 
 ### Fase C: robustez (rúbrica 25 %; consigna 2 y 4; correcciones PE2 y PE5)
@@ -251,10 +251,10 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase D: entorno y estándares (rúbrica 10 %)
 
-14. [ ] **`requirements.txt` con versiones fijas (`==`)**, con las versiones instaladas hoy (`pip list` del `.venv`: `langgraph==1.2.14`, `langchain-core==1.6.3`, `fastapi==0.146.0`, etc.). Se mantienen los comentarios por pre-entrega y se agrega arriba "Python 3.12+".
+14. [x] **`requirements.txt` con versiones fijas (`==`)**, con las versiones instaladas hoy (`pip list` del `.venv`: `langgraph==1.2.14`, `langchain-core==1.6.3`, `fastapi==0.146.0`, etc.). Se mantienen los comentarios por pre-entrega y se agrega arriba "Python 3.12+".
     — verificación: el job `tests` del CI instala en Ubuntu limpio y pasa. Si una versión no tiene wheel para Linux, se ajusta esa sola y se anota el porqué.
 
-15. [ ] **Variables de entorno.**
+15. [x] **Variables de entorno.**
     - `EMBEDDINGS_MODEL` en `rag_pinecone/config.py: cargar_config`. El valor por defecto queda en `rag/config.py`, que es el único lugar.
     - En `.env.example`: `LLM_PROVIDER=anthropic`, `ANTHROPIC_MODEL=claude-haiku-4-5` y `EMBEDDINGS_MODEL`.
     - En el README, una tabla de todas las variables: para qué es cada una y su valor por defecto. Va con una frase explícita: "ningún id de modelo o de índice está en la lógica; los valores por defecto viven solo en `llm_client/settings.py`, `rag/config.py` y `rag_pinecone/config.py`, y coinciden con `.env.example`".

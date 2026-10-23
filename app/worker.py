@@ -4,6 +4,9 @@
                        -> WAITING_APPROVAL -(POST /approve)-> PENDING -> RUNNING -> DONE
                        -> FAILED (excepción o timeout)
 
+Si la API se cae a mitad de un trabajo, el mensaje sigue en "en proceso" (app/jobs.py),
+vuelve a la cola al arrancar y `_ejecutar` retoma desde el último checkpoint.
+
 Corren como tareas de asyncio en el mismo proceso que la API. Como la cola y el
 estado viven en Redis, pasar a un proceso aparte (o a Arq/Celery) no cambia
 nada de lo de abajo.
@@ -48,23 +51,46 @@ def _resultado(final: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]) -> dict[str, Any]:
-    """Corre (o reanuda) el grafo y devuelve los campos del trabajo a actualizar."""
-    reanuda = "resume" in mensaje
-    entrada = Command(resume=mensaje["resume"]) if reanuda else {"messages": [HumanMessage(job.pedido)]}
+    """Corre, reanuda o retoma el grafo y devuelve los campos del trabajo a actualizar.
+
+    Decide el checkpoint del `thread_id`, no el tipo de mensaje. Así una sola regla cubre el
+    pedido nuevo, la firma y la recuperación tras una caída:
+
+    - interrupción pendiente y el mensaje trae `resume`: la firma, `Command(resume=...)`;
+    - interrupción pendiente sin `resume`: vuelve a esperar la firma, sin llamar al LLM;
+    - quedó a mitad de camino (`next`): retoma desde el último paso guardado;
+    - terminó pero el estado del trabajo no se guardó: DONE con esos valores, sin LLM;
+    - sin checkpoint: arranca de cero con el pedido.
+    """
     config = {"configurable": {"thread_id": job.id}, "recursion_limit": LIMITE_PASOS}
+    snap = await grafo.aget_state(config)
+    resume = mensaje.get("resume")
+    if snap.interrupts and resume is None:
+        logger.info("[worker] %s sigue esperando la firma", job.id)
+        return {"estado": EstadoJob.WAITING_APPROVAL, "aprobacion": job.aprobacion or snap.interrupts[0].value}
     # En Phoenix: sesión = trabajo, etiqueta = tipo de pedido, usuario = quien firmó.
     atributos = {
         "session_id": job.id,
         "tags": ["reembolso" if detectar_accion(job.pedido) else "consulta"],
         "metadata": {"job_id": job.id},
     }
-    if reanuda:
-        atributos["user_id"] = mensaje["resume"]["revisor"]
-    with using_attributes(**atributos), tracer.start_as_current_span(
-        "firma" if reanuda else "pedido", openinference_span_kind="chain"
-    ) as span:
-        span.set_input(mensaje["resume"] if reanuda else job.pedido)
-        final = await asyncio.wait_for(grafo.ainvoke(entrada, config), TIMEOUT_JOB_S)
+    if snap.interrupts:
+        nombre, entrada, entrada_span = "firma", Command(resume=resume), resume
+        atributos["user_id"] = resume["revisor"]
+    elif snap.next:
+        nombre, entrada, entrada_span = "reanudacion", None, {"siguiente": list(snap.next)}
+        atributos["tags"].append("recuperado")
+        logger.info("[worker] %s reanuda desde el checkpoint (siguiente: %s)", job.id, ", ".join(snap.next))
+    elif snap.values:
+        logger.info("[worker] %s ya había terminado en el checkpoint: se guarda sin volver a correr", job.id)
+        return await _terminado(job, resume, _resultado(snap.values))
+    else:
+        nombre, entrada, entrada_span = "pedido", {"messages": [HumanMessage(job.pedido)]}, job.pedido
+
+    with using_attributes(**atributos), tracer.start_as_current_span(nombre, openinference_span_kind="chain") as span:
+        span.set_input(entrada_span)
+        # durability="sync": cada paso queda guardado antes de seguir; al retomar no se paga dos veces un nodo.
+        final = await asyncio.wait_for(grafo.ainvoke(entrada, config, durability="sync"), TIMEOUT_JOB_S)
         span.set_status(Status(StatusCode.OK))  # si el grafo falla, el span queda en ERROR solo
         if interrupciones := final.get("__interrupt__"):
             span.set_output("Esperando firma humana")
@@ -73,9 +99,18 @@ async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]
             return {"estado": EstadoJob.WAITING_APPROVAL, "aprobacion": {**interrupciones[0].value, "span_id": span_id}}
         resultado = _resultado(final)
         span.set_output(resultado["respuesta_final"])
-    if reanuda and job.aprobacion and job.aprobacion.get("span_id"):
-        await anotar_firma(job.aprobacion["span_id"], mensaje["resume"])
+    return await _terminado(job, resume, resultado)
+
+
+async def _terminado(job: Job, resume: dict[str, Any] | None, resultado: dict[str, Any]) -> dict[str, Any]:
+    """DONE; si fue una firma, la decisión queda anotada en el span que la pidió."""
+    if resume is not None and job.aprobacion and job.aprobacion.get("span_id"):
+        await anotar_firma(job.aprobacion["span_id"], resume)
     return {"estado": EstadoJob.DONE, "resultado": resultado, "aprobacion": None}
+
+
+#: Estados en los que un mensaje repetido no tiene nada que hacer.
+_TERMINADOS = {EstadoJob.DONE, EstadoJob.FAILED}
 
 
 async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str, Any]) -> None:
@@ -83,6 +118,10 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
     job = await store.obtener(job_id)
     if job is None:  # venció el TTL mientras esperaba en la cola
         logger.warning("[worker] el trabajo %s ya no existe", job_id)
+        return
+    # Idempotencia: un mensaje recuperado o duplicado de un trabajo ya resuelto no lo vuelve a correr.
+    if job.estado in _TERMINADOS or (job.estado == EstadoJob.WAITING_APPROVAL and "resume" not in mensaje):
+        logger.info("[worker] %s ya está en %s: descarto el mensaje repetido", job_id, job.estado)
         return
     await store.actualizar(job_id, estado=EstadoJob.RUNNING)
     try:
@@ -100,9 +139,13 @@ async def correr_worker(store: JobStore, grafo: CompiledStateGraph, nombre: str)
     logger.info("[%s] escuchando la cola", nombre)
     while True:
         try:
-            mensaje = await store.desencolar()
-            if mensaje is not None:
+            item = await store.desencolar()
+            if item is not None:
+                crudo, mensaje = item
                 await procesar(store, grafo, mensaje)
+                # Recién con el estado final guardado. Si se cancela antes (apagado), el mensaje
+                # queda en "en proceso" y se recupera al arrancar.
+                await store.confirmar(crudo)
         except asyncio.CancelledError:
             raise
         except Exception:  # Redis caído un momento: no matar al worker
