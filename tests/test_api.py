@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 import pytest
 from fakeredis import FakeAsyncRedis
+from redis.asyncio import Redis as RedisAsync
 from redis.exceptions import ConnectionError as RedisConnectionError
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
@@ -261,6 +262,31 @@ async def test_aprobar_un_trabajo_que_no_espera_da_409(redis: FakeAsyncRedis) ->
     assert r.status_code == 409
 
 
+async def test_la_firma_es_atomica_si_falla_el_encolado_se_puede_volver_a_firmar(
+    redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def lpush_caido(*args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        raise RedisConnectionError("se cortó antes de encolar")
+
+    revision = {"aprobado": True, "revisor": "ana"}
+    async with cliente(redis) as http:
+        r = await http.post("/tasks", json={"pedido": f"Reembolsá {APROBADO}"})
+        job_id = r.json()["id"]
+        await esperar(http, job_id, "WAITING_APPROVAL")
+        # En la clase: alcanza tanto al LPUSH suelto como al que va dentro de la transacción.
+        monkeypatch.setattr(RedisAsync, "lpush", lpush_caido)
+        caida = await http.post(f"/tasks/{job_id}/approve", json=revision)
+        monkeypatch.undo()
+        assert caida.status_code == 503
+        # No quedó un PENDING sin mensaje: sigue esperando la firma y se puede volver a firmar.
+        assert (await http.get(f"/tasks/{job_id}")).json()["estado"] == "WAITING_APPROVAL"
+        dos = await asyncio.gather(*(http.post(f"/tasks/{job_id}/approve", json=revision) for _ in range(2)))
+        assert sorted(r.status_code for r in dos) == [202, 409]  # dos firmas a la vez: pasa una
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert job["estado"] == "DONE"
+    assert list(await redis.hkeys(REEMBOLSOS)) == [APROBADO]
+
+
 # --- Cola confiable y recuperación tras un reinicio ----------------------------
 
 PEDIDO = "Analizá los cobros de Ferretería López"
@@ -284,7 +310,7 @@ async def test_un_mensaje_repetido_de_un_trabajo_terminado_se_descarta(redis: Fa
         r = await http.post("/tasks", json={"pedido": PEDIDO})
         antes = await esperar(http, r.json()["id"], "DONE")
         llamadas = len(modelo.vistos)
-        await JobStore(redis).encolar(antes["id"])  # el mismo mensaje, otra vez
+        await redis.lpush(COLA, json.dumps({"job_id": antes["id"]}))  # el mismo mensaje, otra vez
         assert await cola_vacia(redis)
         despues = (await http.get(f"/tasks/{antes['id']}")).json()
     assert len(modelo.vistos) == llamadas  # ninguna llamada nueva al modelo

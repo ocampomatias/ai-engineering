@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
+from redis.exceptions import WatchError
 
 PREFIJO = "tambor"
 COLA = f"{PREFIJO}:cola"
@@ -89,11 +90,29 @@ class JobStore:
         await self._guardar(job)
         return job
 
-    async def encolar(self, job_id: str, resume: dict[str, Any] | None = None) -> None:
-        mensaje: dict[str, Any] = {"job_id": job_id}
-        if resume is not None:
-            mensaje["resume"] = resume
-        await self.redis.lpush(COLA, json.dumps(mensaje))
+    async def reanudar(self, job_id: str, resume: dict[str, Any]) -> Job | None:
+        """Pasa el trabajo de WAITING_APPROVAL a PENDING y encola la revisión, en una sola transacción.
+
+        WATCH + MULTI/EXEC: si la API se cae antes del EXEC no se escribió nada y la revisión se
+        puede volver a mandar (nunca queda un PENDING sin mensaje), y si llegan dos revisiones a la
+        vez solo una pasa. None si el trabajo no existe, no espera aprobación o ya se revisó.
+        """
+        clave = self._clave(job_id)
+        async with self.redis.pipeline(transaction=True) as tx:
+            await tx.watch(clave)
+            crudo = await tx.get(clave)
+            job = Job.model_validate_json(crudo) if crudo else None
+            if job is None or job.estado != EstadoJob.WAITING_APPROVAL:
+                return None
+            job = job.model_copy(update={"estado": EstadoJob.PENDING, "actualizado": _ahora()})
+            tx.multi()
+            tx.set(clave, job.model_dump_json(), ex=TTL_JOB_S)
+            tx.lpush(COLA, json.dumps({"job_id": job_id, "resume": resume}))
+            try:
+                await tx.execute()
+            except WatchError:  # otra revisión cambió el trabajo entre el GET y el EXEC
+                return None
+        return job
 
     async def desencolar(self, timeout_s: float = 2) -> tuple[str, dict[str, Any]] | None:
         """El próximo mensaje `(crudo, mensaje)`, o None si no llegó nada en `timeout_s`.
@@ -123,10 +142,6 @@ class JobStore:
         while await self.redis.lmove(PROCESANDO, COLA, "LEFT", "RIGHT"):
             movidos += 1
         return movidos
-
-    async def tomar_revision(self, job_id: str) -> bool:
-        """True solo para la primera revisión de un trabajo: dos aprobaciones a la vez no lo reanudan dos veces."""
-        return bool(await self.redis.set(f"{self._clave(job_id)}:revision", "1", nx=True, ex=TTL_JOB_S))
 
     async def registrar_reembolso(self, cobro_id: str, datos: dict[str, Any]) -> bool:
         """El efecto secundario del flujo. HSETNX: un cobro no se reembolsa dos veces."""

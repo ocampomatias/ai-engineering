@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 
 from agente.datos import BaseCobros, normalizar
 
-from .jobs import EstadoJob, Job
+from .jobs import Job
 
 _VERBO_REEMBOLSO = re.compile(r"\b(reembols|reintegr|devolv|devuelv)\w*")
 _ID_COBRO = re.compile(r"\bcob_[A-Z0-9]{5}\b")
@@ -128,10 +128,9 @@ async def aprobar(job_id: str, revision: Revision, request: Request) -> Job:
     job = await store.obtener(job_id)
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No existe ese trabajo.")
-    if job.estado != EstadoJob.WAITING_APPROVAL or not await store.tomar_revision(job_id):
+    reanudado = await store.reanudar(job_id, revision.model_dump())
+    if reanudado is None:
         raise HTTPException(
             status.HTTP_409_CONFLICT, f"El trabajo no espera aprobación (estado: {job.estado})."
         )
-    job = await store.actualizar(job_id, estado=EstadoJob.PENDING)
-    await store.encolar(job_id, resume=revision.model_dump())
-    return job
+    return reanudado
