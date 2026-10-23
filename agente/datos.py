@@ -27,22 +27,22 @@ def normalizar(texto: str) -> str:
 
 
 class Comercio(BaseModel):
-    id: int
-    nombre: str
-    plan: str
-    alta: str
-    estado: str
+    id: int = Field(description="ID numérico del comercio, ej. 102.")
+    nombre: str = Field(description="Nombre del comercio, ej. 'Ferretería López'.")
+    plan: str = Field(description="Plan contratado: Básico, Pro o Empresa.")
+    alta: str = Field(description="Fecha de alta en Tambor, AAAA-MM-DD.")
+    estado: str = Field(description="Estado de la cuenta del comercio, ej. 'activo'.")
 
 
 class Cobro(BaseModel):
-    id: str
-    comercio_id: int
-    fecha: str
+    id: str = Field(description="ID del cobro, formato cob_XXXXX (ej. cob_7F3K2).")
+    comercio_id: int = Field(description="ID del comercio que cobró.")
+    fecha: str = Field(description="Fecha y hora del cobro, ISO 8601.")
     monto: str = Field(description="Monto formateado, ej. '45.990,00 ARS'.")
-    estado: EstadoCobro
-    codigo_error: str | None
-    medio: str
-    intentos: int
+    estado: EstadoCobro = Field(description="aprobado, rechazado, en_revision o reembolsado.")
+    codigo_error: str | None = Field(description="Código TMB-XXXX si el cobro falló; si no, null.")
+    medio: str = Field(description="Medio de pago, ej. tarjeta de crédito.")
+    intentos: int = Field(description="Cuántas veces se intentó el cobro.")
 
 
 def _formatear_monto(centavos: int, moneda: str) -> str:

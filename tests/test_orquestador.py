@@ -15,6 +15,8 @@ import json
 from decimal import Decimal
 from typing import Any
 
+import anthropic
+import httpx
 import pytest
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -26,6 +28,8 @@ from test_agente import ModeloGuionado, llamada, respuesta
 from orquestador import Aporte, Decision, construir_orquestador, ejecutar, rutear
 from orquestador.agents import MAX_DELEGACIONES
 from orquestador.agents.analyst_agent import (
+    Estadisticas,
+    ResultadoCalculo,
     calcular,
     calcular_estadisticas,
     estadisticas_cobros,
@@ -147,6 +151,19 @@ def test_calcular_devuelve_el_error_al_modelo() -> None:
     assert "no permitido" in calcular.invoke({"expresion": "abs(-1)"})
 
 
+def test_las_salidas_del_analista_validan_con_su_modelo() -> None:
+    cobros = [
+        {"id": "cob_7F3K2", "monto": "45.990,00 ARS", "estado": "rechazado", "codigo_error": "TMB-2031"},
+        {"id": "cob_7E8Q4", "monto": "8.700,00 ARS", "estado": "aprobado"},
+    ]
+    estadisticas = Estadisticas.model_validate_json(estadisticas_cobros.invoke({"cobros": cobros}))
+    assert estadisticas.por_estado == {"rechazado": 1, "aprobado": 1}
+    resultado = ResultadoCalculo.model_validate_json(calcular.invoke({"expresion": "1 + 1"}))
+    assert resultado.resultado == "2"
+    for modelo in (Estadisticas, ResultadoCalculo):
+        assert all(c.description for c in modelo.model_fields.values()), modelo.__name__
+
+
 # --- Especialistas -----------------------------------------------------------
 
 
@@ -188,6 +205,68 @@ async def test_especialista_que_falla_no_rompe_el_grafo() -> None:
     nodo = crear_especialista("investigador", ModeloRoto(), [], "prompt")
     aporte = (await nodo(estado(instruccion="Buscá algo")))["aportes"][0]
     assert aporte.error and "ConnectionError" in aporte.contenido
+
+
+class ModeloQueFalla(ModeloGuionado):
+    """Lanza los errores de la lista, uno por llamada, y después sigue el guion."""
+
+    errores: list[Any] = []
+    llamadas: int = 0
+
+    def _generate(self, *args: Any, **kwargs: Any) -> ChatResult:  # noqa: ANN401
+        self.llamadas += 1
+        if self.errores:
+            raise self.errores.pop(0)
+        return super()._generate(*args, **kwargs)
+
+
+_PEDIDO_ANTHROPIC = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+
+async def test_especialista_reintenta_un_error_transitorio() -> None:
+    from orquestador.agents.analyst_agent import herramientas_analista
+
+    modelo = ModeloQueFalla(
+        errores=[anthropic.APIConnectionError(request=_PEDIDO_ANTHROPIC)],
+        guion=[respuesta("Listo.")],
+    )
+    nodo = crear_especialista("analista", modelo, herramientas_analista(), "prompt")
+    aporte = (await nodo(estado(instruccion="Sumá 2 + 2")))["aportes"][0]
+    assert not aporte.error and aporte.contenido == "Listo."
+    assert modelo.llamadas == 2
+
+
+async def test_especialista_no_reintenta_una_key_invalida() -> None:
+    from orquestador.agents.analyst_agent import herramientas_analista
+
+    key_invalida = anthropic.AuthenticationError(
+        "invalid x-api-key", response=httpx.Response(401, request=_PEDIDO_ANTHROPIC), body=None
+    )
+    modelo = ModeloQueFalla(errores=[key_invalida], guion=[respuesta("no debería llegar")])
+    nodo = crear_especialista("analista", modelo, herramientas_analista(), "prompt")
+    aporte = (await nodo(estado(instruccion="Sumá 2 + 2")))["aportes"][0]
+    assert aporte.error and "AuthenticationError" in aporte.contenido
+    assert modelo.llamadas == 1
+
+
+def test_el_reembolso_reintenta_solo_caidas_de_redis() -> None:
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from app.graph import REDIS_TRANSITORIO, construir_grafo
+
+    async def registrar(cobro_id: str, datos: dict[str, Any]) -> bool:
+        return True
+
+    grafo = construir_grafo(
+        InMemorySaver(),
+        registrar,
+        SupervisorGuionado(),
+        investigador=fake_especialista("investigador", "x"),
+        analista=fake_especialista("analista", "x"),
+    )
+    politica = grafo.builder.nodes["reembolso"].retry_policy
+    assert politica.max_attempts == 3 and politica.retry_on == REDIS_TRANSITORIO
+    assert grafo.builder.nodes["supervisor"].retry_policy is None
 
 
 # --- Grafo -----------------------------------------------------------------

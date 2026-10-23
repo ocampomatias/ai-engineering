@@ -11,7 +11,9 @@ especialista ve su tarea, no la conversación entera.
 
 Si el especialista falla (error de la API, límite de pasos), el nodo no rompe
 el grafo: devuelve un `Aporte` con `error=True`, y el supervisor decide si
-reintenta, cambia de estrategia o sintetiza con lo que hay.
+reintenta, cambia de estrategia o sintetiza con lo que hay. Antes de eso, cada
+llamada al LLM se reintenta hasta 3 veces ante errores transitorios (429, 529,
+5xx, red): un rate limit momentáneo no gasta una delegación del supervisor.
 """
 
 import logging
@@ -23,6 +25,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import BaseTool
 from langgraph.prebuilt import create_react_agent
+
+from pipeline.chain import ERRORES_TRANSITORIOS
 
 from ..state import Aporte, EstadoOrquestador, Especialista
 
@@ -64,7 +68,15 @@ def crear_especialista(
     prompt: str,
 ) -> NodoEspecialista:
     """Un nodo del grafo que corre un agente ReAct con herramientas acotadas a su rol."""
-    agente = create_react_agent(modelo, list(herramientas), prompt=prompt, name=nombre)
+    con_herramientas = modelo.bind_tools(list(herramientas)) if herramientas else modelo
+    con_reintento = con_herramientas.with_retry(
+        retry_if_exception_type=ERRORES_TRANSITORIOS, stop_after_attempt=3
+    )
+    # Modelo dinámico (state, runtime) -> modelo: como modelo estático, create_react_agent le
+    # pediría bind_tools al RunnableRetry y falla. Así se reintenta cada llamada, no la corrida.
+    agente = create_react_agent(
+        lambda _estado, _runtime: con_reintento, list(herramientas), prompt=prompt, name=nombre
+    )
 
     async def nodo(estado: EstadoOrquestador) -> dict[str, Any]:
         instruccion = estado["instruccion"]

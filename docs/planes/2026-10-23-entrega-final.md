@@ -159,7 +159,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
    Además, los 12 tests actuales de `test_api.py` siguen verdes.
 
-4. [ ] **`probar_api.py --reinicio`.**
+4. [x] **`probar_api.py --reinicio`.**
    - Levanta su propio `uvicorn` en el puerto 8001 como subproceso, con salida a `evidencia/log_reinicio_api.log`.
    - Manda el pedido de reembolso y espera en ese log la línea `[investigador] recibe`. Para entonces el checkpoint posterior al supervisor ya está guardado, por `durability="sync"`.
    - Mata el proceso con `kill()`: una caída real, sin apagado ordenado.
@@ -215,7 +215,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
    - test de los validadores (`"     "` → 422; revisor `"  "` → 422);
    - los tests de la consola y del flujo siguen verdes sin tocar `app/static/`.
 
-10. [ ] **Pydantic en las salidas de las 6 herramientas** (`agente/herramientas.py` y `orquestador/agents/analyst_agent.py`):
+10. [x] **Pydantic en las salidas de las 6 herramientas** (`agente/herramientas.py` y `orquestador/agents/analyst_agent.py`):
     - modelos `SalidaBuscarComercio`, `SalidaListarCobros`, `SalidaConsultarCobro`, `SalidaBuscarDocumentacion` (con `Fragmento` y el campo `buscador`, que deja a la vista en Phoenix si respondió `pinecone-hibrido` o `bm25-local`), `Estadisticas` y `ResultadoCalculo`;
     - cada herramienta devuelve `modelo.model_dump_json()`;
     - descripciones en `Comercio` y `Cobro`;
@@ -224,7 +224,9 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
     — verificación: los tests actuales de herramientas (mismas claves JSON); test nuevo que valida la salida de cada herramienta con su modelo (`Modelo.model_validate_json(salida)`); test de la normalización del ID.
 
-11. [ ] **Reintentos (PE5).**
+    *Nota (implementación, 23-oct):* las salidas se serializan con `model_dump_json(exclude_unset=True)`, no con `model_dump_json()` a secas: así `aviso` no aparece como `null` cuando no se llenó, y las claves quedan iguales a las de antes. Se agregó `CobroResumido` (los 5 campos que devuelve `listar_cobros`). El log es `validación OK: <herramienta> -> <Modelo> en X ms`.
+
+11. [x] **Reintentos (PE5).**
     - En `orquestador/agents/especialista.py`, el modelo dinámico con `bind_tools(...).with_retry(retry_if_exception_type=ERRORES_TRANSITORIOS, stop_after_attempt=3)` (decisión 4).
     - En `app/graph.py`, `retry_policy=RetryPolicy(max_attempts=3, retry_on=(redis ConnectionError, TimeoutError))` en el nodo `reembolso`.
 
@@ -237,7 +239,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
     - `POST /tasks` loguea `validación OK: pedido de N caracteres -> job <id> encolado en X ms`, y `/approve`, `validación OK: revisión de <revisor> (aprobado=...)`.
     - El supervisor antepone `validación OK: Decision` a su log actual.
     - El worker loguea `[worker] <id> -> DONE en 23,4 s` (con `time.perf_counter`).
-    - `crear_buscador` loguea `documentación: pinecone-hibrido` o `documentación: bm25-local` al crearse.
+    - `crear_buscador` loguea `documentación: pinecone-hibrido` o `documentación: bm25-local` al crearse. *(Hecho junto con el paso 10, en `agente/documentacion.py`, con test en `tests/test_agente.py`.)*
     - El `lifespan` llama a `iniciar_trazas` y `cerrar_trazas` con `await asyncio.to_thread(...)`.
 
     — verificación: test con `caplog` que encuentra `validación OK` y `DONE en` después de un pedido; la suite completa en verde.

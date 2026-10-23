@@ -11,15 +11,19 @@ Los nodos del supervisor, los especialistas y la síntesis son los mismos de
   de cada paso con `thread_id = job_id`. Es lo que permite pausar en
   `aprobacion` y reanudar horas después, en otro proceso.
 - Dos nodos al final (`app/hitl.py`): el punto de interrupción y el reembolso.
+  El reembolso se reintenta ante una caída momentánea de Redis: es seguro porque
+  `HSETNX` no registra dos veces el mismo cobro.
 """
 
 from typing import Any
 
+import redis.exceptions
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis.jsonplus_redis import JsonPlusRedisSerializer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import RetryPolicy
 
 from agente.documentacion import ModoBuscador
 from orquestador import Aporte, Decision, EstadoOrquestador, rutear
@@ -54,6 +58,10 @@ def serializador_redis() -> JsonPlusRedisSerializer:
     return JsonPlusRedisSerializer(allowed_json_modules=TIPOS_DEL_ESTADO)
 
 
+#: Caídas momentáneas de Redis: lo único ante lo que se reintenta el nodo `reembolso`.
+REDIS_TRANSITORIO = (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)
+
+
 class EstadoProduccion(EstadoOrquestador):
     accion: Accion
     revision: Revision
@@ -77,7 +85,11 @@ def construir_grafo(
     grafo.add_node("analista", analista or crear_analista(modelo))
     grafo.add_node("sintesis", crear_sintesis(modelo))
     grafo.add_node("aprobacion", aprobacion)
-    grafo.add_node("reembolso", crear_nodo_reembolso(registrar_reembolso))
+    grafo.add_node(
+        "reembolso",
+        crear_nodo_reembolso(registrar_reembolso),
+        retry_policy=RetryPolicy(max_attempts=3, retry_on=REDIS_TRANSITORIO),
+    )
 
     grafo.add_edge(START, "supervisor")
     grafo.add_conditional_edges("supervisor", rutear)

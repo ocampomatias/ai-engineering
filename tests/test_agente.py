@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 import sqlite3
 from itertools import count
 from pathlib import Path
@@ -23,6 +25,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from pydantic import BaseModel, ValidationError
 
 from agente import (
     PROMPT_SISTEMA,
@@ -30,9 +33,21 @@ from agente import (
     BuscadorLocal,
     abrir_agente,
     construir_grafo,
+    crear_buscador,
     crear_herramientas,
 )
-from agente.datos import normalizar
+from agente.datos import Cobro, Comercio, normalizar
+from agente.herramientas import (
+    CobroResumido,
+    EntradaBuscarComercio,
+    EntradaBuscarDocumentacion,
+    EntradaConsultarCobro,
+    Fragmento,
+    SalidaBuscarComercio,
+    SalidaBuscarDocumentacion,
+    SalidaConsultarCobro,
+    SalidaListarCobros,
+)
 
 # --- Dobles -----------------------------------------------------------------
 
@@ -204,6 +219,62 @@ async def test_buscar_documentacion_caida_no_corta_el_grafo(base: BaseCobros) ->
     resultado = await ejecutar(herramientas, "buscar_documentacion", consulta="TMB-2031")
     assert resultado.status == "error"
     assert "no está disponible" in resultado.content
+
+
+@pytest.mark.parametrize(
+    ("nombre", "argumentos", "modelo"),
+    [
+        ("buscar_comercio", {"nombre": "López"}, SalidaBuscarComercio),
+        ("buscar_comercio", {"nombre": "Andina"}, SalidaBuscarComercio),
+        ("listar_cobros", {"comercio_id": 102}, SalidaListarCobros),
+        ("listar_cobros", {"comercio_id": 105, "estado": "rechazado"}, SalidaListarCobros),
+        ("consultar_cobro", {"cobro_id": "cob_7F3K2"}, SalidaConsultarCobro),
+        ("buscar_documentacion", {"consulta": "TMB-2031", "k": 2}, SalidaBuscarDocumentacion),
+    ],
+)
+async def test_la_salida_valida_con_su_modelo(
+    herramientas: dict[str, Any], nombre: str, argumentos: dict[str, Any], modelo: type[BaseModel]
+) -> None:
+    contenido = (await ejecutar(herramientas, nombre, **argumentos)).content
+    modelo.model_validate_json(contenido)
+    datos = json.loads(contenido)
+    # Las claves opcionales solo aparecen cuando tienen valor, como antes de los modelos.
+    assert "aviso" not in datos or datos["aviso"]
+    if nombre == "buscar_documentacion":
+        assert datos["buscador"] == "bm25-local"
+
+
+def test_modelos_de_datos_y_salidas_describen_cada_campo() -> None:
+    for modelo in (Comercio, Cobro, CobroResumido, Fragmento, SalidaBuscarComercio, SalidaListarCobros,
+                   SalidaConsultarCobro, SalidaBuscarDocumentacion):
+        sin_descripcion = [n for n, c in modelo.model_fields.items() if not c.description]
+        assert not sin_descripcion, f"{modelo.__name__}: {sin_descripcion}"
+
+
+async def test_el_id_del_cobro_se_normaliza(herramientas: dict[str, Any]) -> None:
+    assert EntradaConsultarCobro(cobro_id="cob_7f3k2").cobro_id == "cob_7F3K2"
+    assert EntradaConsultarCobro(cobro_id="  COB_7f3k2 ").cobro_id == "cob_7F3K2"
+    with pytest.raises(ValidationError):
+        EntradaConsultarCobro(cobro_id="7f3k2")
+    resultado = await ejecutar(herramientas, "consultar_cobro", cobro_id="cob_7f3k2")
+    assert resultado.status != "error" and json.loads(resultado.content)["id"] == "cob_7F3K2"
+
+
+def test_las_consultas_de_texto_se_recortan() -> None:
+    assert EntradaBuscarComercio(nombre="  López  ").nombre == "López"
+    assert EntradaBuscarDocumentacion(consulta=" TMB-2031\n").consulta == "TMB-2031"
+    with pytest.raises(ValidationError):
+        EntradaBuscarComercio(nombre="  a  ")  # recortado queda de 1 carácter
+
+
+async def test_loguea_la_validacion_y_el_buscador(
+    herramientas: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="agente")
+    await ejecutar(herramientas, "consultar_cobro", cobro_id="cob_7F3K2")
+    assert re.search(r"validación OK: consultar_cobro -> SalidaConsultarCobro en [\d.]+ ms", caplog.text)
+    crear_buscador("local")
+    assert "documentación: bm25-local" in caplog.text
 
 
 # --- Grafo -----------------------------------------------------------------

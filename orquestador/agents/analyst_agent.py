@@ -11,9 +11,9 @@ No consulta la base ni la documentación: sus herramientas son de cómputo.
 """
 
 import ast
-import json
 import operator
 import re
+import time
 from collections import Counter
 from decimal import Decimal, InvalidOperation
 
@@ -22,6 +22,7 @@ from langchain_core.tools import BaseTool, ToolException, tool
 from pydantic import BaseModel, Field, field_validator
 
 from agente.datos import EstadoCobro
+from agente.herramientas import responder
 
 from .especialista import NodoEspecialista, crear_especialista
 
@@ -124,7 +125,7 @@ def evaluar_expresion(expresion: str) -> Decimal:
     if len(expresion) > 200:
         raise ValueError("expresión demasiado larga (máximo 200 caracteres)")
     try:
-        return evaluar(ast.parse(expresion.replace(",", "."), mode="eval"))
+        return evaluar(ast.parse(expresion.strip().replace(",", "."), mode="eval"))
     except (SyntaxError, ZeroDivisionError, InvalidOperation) as exc:
         raise ValueError(f"no se pudo calcular {expresion!r}: {exc}") from exc
 
@@ -134,6 +135,23 @@ class EntradaCalcular(BaseModel):
         min_length=1,
         description="Expresión aritmética con números, + - * / y paréntesis. Ej: '(45990 + 12500) * 0.1'.",
     )
+
+
+class Estadisticas(BaseModel):
+    cobros: int = Field(ge=1, description="Cuántos cobros se analizaron.")
+    por_estado: dict[EstadoCobro, int] = Field(description="Cantidad de cobros por estado.")
+    tasa_rechazo: str = Field(description="Rechazados sobre el total, ej. '20,0 %'.")
+    tasa_no_cobrados: str = Field(description="Rechazados + en revisión sobre el total, ej. '40,0 %'.")
+    montos_por_moneda: dict[str, dict[str, str]] = Field(
+        description="Por moneda: el 'total' y el monto de cada estado, formateados ('45.990,00 ARS')."
+    )
+    codigos_error: dict[str, int] = Field(description="Cuántas veces aparece cada código TMB-XXXX.")
+    nota: str = Field(description="Cómo leer los números.")
+
+
+class ResultadoCalculo(BaseModel):
+    expresion: str = Field(description="La expresión que se evaluó, tal como llegó.")
+    resultado: str = Field(description="El resultado exacto, en decimal sin notación científica.")
 
 
 @tool(args_schema=EntradaEstadisticas)
@@ -146,7 +164,8 @@ def estadisticas_cobros(cobros: list[CobroParaAnalizar]) -> str:
     Pasá los cobros con el ID, el monto exactamente como vino ('45.990,00 ARS'), el estado y el
     código de error si tiene.
     """
-    return json.dumps(calcular_estadisticas(cobros), ensure_ascii=False)
+    inicio = time.perf_counter()
+    return responder("estadisticas_cobros", Estadisticas(**calcular_estadisticas(cobros)), inicio)
 
 
 @tool(args_schema=EntradaCalcular)
@@ -157,11 +176,13 @@ def calcular(expresion: str) -> str:
     el crédito que corresponde según el SLA. Escribí los montos como números sin separador de
     miles: 45990.00, no 45.990,00.
     """
+    inicio = time.perf_counter()
     try:
         resultado = evaluar_expresion(expresion)
     except ValueError as exc:
         raise ToolException(str(exc)) from exc
-    return json.dumps({"expresion": expresion, "resultado": format(resultado.normalize(), "f")})
+    salida = ResultadoCalculo(expresion=expresion, resultado=format(resultado.normalize(), "f"))
+    return responder("calcular", salida, inicio)
 
 
 def herramientas_analista() -> list[BaseTool]:

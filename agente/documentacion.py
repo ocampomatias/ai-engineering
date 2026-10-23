@@ -85,4 +85,6 @@ def crear_buscador(modo: ModoBuscador = "auto") -> Buscador:
     """`auto` usa Pinecone si hay PINECONE_API_KEY en el entorno y si no, BM25 local."""
     if modo == "auto":
         modo = "pinecone" if os.getenv("PINECONE_API_KEY", "").strip() else "local"
-    return BuscadorPinecone() if modo == "pinecone" else BuscadorLocal()
+    buscador = BuscadorPinecone() if modo == "pinecone" else BuscadorLocal()
+    logger.info("documentación: %s", buscador.nombre)
+    return buscador
