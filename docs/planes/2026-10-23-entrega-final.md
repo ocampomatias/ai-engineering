@@ -203,7 +203,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase C: robustez (rúbrica 25 %; consigna 2 y 4; correcciones PE2 y PE5)
 
-9. [ ] **Pydantic en la API** (`app/main.py`, `app/jobs.py`, `app/hitl.py`):
+9. [x] **Pydantic en la API** (`app/main.py`, `app/jobs.py`, `app/hitl.py`):
    - descripción en cada campo de `Pedido`, `Job`, `Revision` y `Accion`;
    - validadores propios: `Pedido.pedido` se recorta y rechaza un texto que sea solo espacios; `Revision.revisor` se recorta y no puede quedar vacío; `Accion.cobro_ids` sin repetidos y con el formato `cob_XXXXX`;
    - `Job.resultado: Resultado | None` (`respuesta_final`, `resultado_accion`, `revision`, `decisiones: list[Decision]`, `aportes: list[Aporte]`) y `Job.aprobacion: SolicitudAprobacion | None` (`accion`, `analisis`, `pregunta`, `span_id`), con las mismas claves de hoy;
@@ -214,6 +214,8 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
    - test nuevo que recorre `app.openapi()["components"]["schemas"]`, sin `HTTPValidationError` ni `ValidationError` de FastAPI, y falla si algún campo no tiene `description`;
    - test de los validadores (`"     "` → 422; revisor `"  "` → 422);
    - los tests de la consola y del flujo siguen verdes sin tocar `app/static/`.
+
+   *Nota (implementación, 23-oct):* `Accion` y `Revision` siguen en `app/hitl.py` (el serializador de los checkpoints las identifica por módulo), pero ahora extienden `AccionGuardada` y `RevisionGuardada` de `app/jobs.py`, que son las formas guardadas dentro de `Job`, sin los validadores de entrada. Así un trabajo ya guardado en Redis (por ejemplo, con un revisor de solo espacios, que antes pasaba) se sigue leyendo, y además se evita el import circular `jobs` ↔ `hitl`. `JobStore.actualizar` valida con `Job.model_validate` en vez de `model_copy`, porque el worker manda dicts. `ErrorAPI.detail` es `str | list[dict]`: en un 422 FastAPI devuelve la lista de campos. `Aporte.agente` no tenía descripción y se le agregó. Test extra: un trabajo con el formato viejo (sin `span_id`) se lee y vuelve con las mismas claves.
 
 10. [x] **Pydantic en las salidas de las 6 herramientas** (`agente/herramientas.py` y `orquestador/agents/analyst_agent.py`):
     - modelos `SalidaBuscarComercio`, `SalidaListarCobros`, `SalidaConsultarCobro`, `SalidaBuscarDocumentacion` (con `Fragmento` y el campo `buscador`, que deja a la vista en Phoenix si respondió `pinecone-hibrido` o `bm25-local`), `Estadisticas` y `ResultadoCalculo`;
@@ -235,7 +237,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
     - test: un `AuthenticationError` no se reintenta (1 llamada) y queda como aporte con error;
     - `test_estructura_del_grafo` sigue verde.
 
-12. [ ] **Logs de validación y tiempos (PE2) + async en el arranque.**
+12. [x] **Logs de validación y tiempos (PE2) + async en el arranque.**
     - `POST /tasks` loguea `validación OK: pedido de N caracteres -> job <id> encolado en X ms`, y `/approve`, `validación OK: revisión de <revisor> (aprobado=...)`.
     - El supervisor antepone `validación OK: Decision` a su log actual.
     - El worker loguea `[worker] <id> -> DONE en 23,4 s` (con `time.perf_counter`).
@@ -244,12 +246,16 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
     — verificación: test con `caplog` que encuentra `validación OK` y `DONE en` después de un pedido; la suite completa en verde.
 
-13. [ ] **Tests de concurrencia (PE5)**, en `tests/test_api.py` y `tests/test_agente.py`:
+    *Nota (implementación, 23-oct):* el log del supervisor quedó `validación OK: Decision | [supervisor] evalúa: ...` (`probar_api.py` sigue contando `[supervisor] evalúa`). El worker también loguea `-> WAITING_APPROVAL en X s` y `-> FAILED en X s`; el formato del `error` no cambió. `iniciar_trazas` puede ir a un thread: el `AsyncClient` de Phoenix crea un `httpx.AsyncClient`, que no necesita el loop para construirse (probado: creado en un thread y usado en el loop).
+
+13. [x] **Tests de concurrencia (PE5)**, en `tests/test_api.py` y `tests/test_agente.py`:
     - (a) 20 `POST /tasks` simultáneos con `asyncio.gather` y 5 workers: todos `DONE`, ids únicos, cola y `procesando` vacías, y cada trabajo con sus propios aportes (los `thread_id` no se mezclan). Se usa el supervisor guionado sin guion, que va siempre directo a la síntesis, para que no haya estado compartido entre pedidos.
     - (b) dos `POST /approve` simultáneos sobre el mismo trabajo: exactamente un 202 y un 409, y un solo reembolso.
     - (c) 20 llamadas simultáneas a `consultar_cobro` y `listar_cobros` sobre la misma `BaseCobros`: resultados idénticos a los secuenciales (el lock de SQLite funciona entre threads).
 
     — verificación: `pytest -q tests/test_api.py tests/test_agente.py` en verde 3 veces seguidas (que no sean inestables).
+
+    *Nota (implementación, 23-oct):* (b) ya estaba cubierto por `test_la_firma_es_atomica_si_falla_el_encolado_se_puede_volver_a_firmar` (dos firmas a la vez: `[202, 409]` y un solo reembolso), así que no se duplicó. En (a), en vez del supervisor sin guion (que no delega y deja los aportes vacíos), un `SupervisorPorPedido` sin estado compartido que delega una vez con el pedido como instrucción: así se comprueba que cada trabajo tiene su propio aporte.
 
 ### Fase D: entorno y estándares (rúbrica 10 %)
 

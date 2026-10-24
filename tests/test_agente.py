@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -265,6 +266,22 @@ def test_las_consultas_de_texto_se_recortan() -> None:
     assert EntradaBuscarDocumentacion(consulta=" TMB-2031\n").consulta == "TMB-2031"
     with pytest.raises(ValidationError):
         EntradaBuscarComercio(nombre="  a  ")  # recortado queda de 1 carácter
+
+
+async def test_veinte_llamadas_simultaneas_dan_lo_mismo_que_las_secuenciales(
+    base: BaseCobros, herramientas: dict[str, Any]
+) -> None:
+    """Las herramientas corren en threads sobre una sola conexión SQLite: el lock no mezcla resultados."""
+    ids = [c.id for comercio_id in range(101, 106) for c in base.listar_cobros(comercio_id, limite=50)]
+    llamadas = [
+        ("consultar_cobro", {"cobro_id": ids[i % len(ids)]}) if i % 2 else
+        ("listar_cobros", {"comercio_id": 101 + i % 5, "limite": 10})
+        for i in range(20)
+    ]
+    secuenciales = [await herramientas[nombre].ainvoke(argumentos) for nombre, argumentos in llamadas]
+    simultaneas = await asyncio.gather(*(herramientas[n].ainvoke(a) for n, a in llamadas))
+    assert simultaneas == secuenciales
+    assert len(set(secuenciales)) > 5  # respuestas distintas, no la misma repetida
 
 
 async def test_loguea_la_validacion_y_el_buscador(

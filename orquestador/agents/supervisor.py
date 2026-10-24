@@ -106,7 +106,7 @@ def crear_supervisor(modelo: BaseChatModel) -> Any:  # noqa: ANN401 - nodo async
                 ]
             )
         logger.info(
-            "[supervisor] evalúa: %s | -> %s: %s (%s)",
+            "validación OK: Decision | [supervisor] evalúa: %s | -> %s: %s (%s)",
             " ".join(decision.evaluacion.split()),
             decision.siguiente,
             decision.instruccion or "-",

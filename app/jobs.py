@@ -14,12 +14,14 @@ Todo es `redis.asyncio`: ninguna operación bloquea el event loop de FastAPI.
 import json
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from redis.exceptions import WatchError
+
+from orquestador.state import Aporte, Decision
 
 PREFIJO = "tambor"
 COLA = f"{PREFIJO}:cola"
@@ -40,17 +42,88 @@ def _ahora() -> datetime:
     return datetime.now(UTC)
 
 
-class Job(BaseModel):
-    id: str
-    pedido: str
-    estado: EstadoJob = EstadoJob.PENDING
-    creado: datetime = Field(default_factory=_ahora)
-    actualizado: datetime = Field(default_factory=_ahora)
-    aprobacion: dict[str, Any] | None = Field(
-        default=None, description="Lo que el grafo dejó esperando revisión humana."
+class AccionGuardada(BaseModel):
+    """La acción crítica tal como queda guardada en el trabajo.
+
+    Sin los validadores de entrada de `app.hitl.Accion` (que la extiende): así un trabajo
+    guardado antes de que existieran se sigue leyendo.
+    """
+
+    tipo: Literal["reembolso"] = Field(
+        default="reembolso", description="Tipo de acción. La única con efectos secundarios es el reembolso."
     )
-    resultado: dict[str, Any] | None = None
-    error: str | None = None
+    cobro_ids: list[str] = Field(
+        min_length=1, description="IDs de los cobros a reembolsar (formato cob_XXXXX).", examples=[["cob_7E8Q4"]]
+    )
+
+
+class RevisionGuardada(BaseModel):
+    """La firma humana tal como queda guardada. `app.hitl.Revision` la extiende con los validadores de entrada."""
+
+    aprobado: bool = Field(description="True aprueba el reembolso; False lo rechaza y no se ejecuta.")
+    revisor: str = Field(
+        min_length=1, max_length=80, description="Quién firma. Queda en el registro del reembolso y en Phoenix."
+    )
+    comentario: str = Field(default="", max_length=500, description="Por qué se aprobó o rechazó (opcional).")
+
+
+class SolicitudAprobacion(BaseModel):
+    """Lo que el grafo dejó esperando la firma: la acción, el análisis y la pregunta para quien revisa."""
+
+    accion: AccionGuardada = Field(description="La acción que se ejecuta si se aprueba.")
+    analisis: str = Field(default="", description="La respuesta de la síntesis, para decidir con los datos a la vista.")
+    pregunta: str = Field(description="La pregunta para quien revisa.")
+    span_id: str | None = Field(
+        default=None, description="Span de Phoenix que pidió la firma; ahí se anota la decisión."
+    )
+
+
+class Resultado(BaseModel):
+    """Lo que dejó el grafo al terminar el trabajo."""
+
+    respuesta_final: str = Field(default="", description="La respuesta de la síntesis para el usuario.")
+    resultado_accion: str | None = Field(
+        default=None, description="Qué pasó con cada cobro del reembolso; null si no hubo reembolso."
+    )
+    revision: RevisionGuardada | None = Field(default=None, description="La firma humana, si el pedido la necesitó.")
+    decisiones: list[Decision] = Field(default_factory=list, description="Cada decisión del supervisor, en orden.")
+    aportes: list[Aporte] = Field(default_factory=list, description="Lo que aportó cada especialista, en orden.")
+
+
+class Job(BaseModel):
+    """Un trabajo: el pedido, su estado y, al final, el resultado o el error."""
+
+    id: str = Field(description="ID del trabajo. Es también el thread_id del checkpoint y la sesión en Phoenix.")
+    pedido: str = Field(description="El pedido tal como lo recibió la API.")
+    estado: EstadoJob = Field(default=EstadoJob.PENDING, description="En qué punto del flujo está el trabajo.")
+    creado: datetime = Field(default_factory=_ahora, description="Cuándo se creó (UTC).")
+    actualizado: datetime = Field(default_factory=_ahora, description="Último cambio de estado (UTC).")
+    aprobacion: SolicitudAprobacion | None = Field(
+        default=None, description="Lo que el grafo dejó esperando revisión humana (solo en WAITING_APPROVAL)."
+    )
+    resultado: Resultado | None = Field(default=None, description="El resultado del grafo (solo en DONE).")
+    error: str | None = Field(default=None, description="Tipo y mensaje del error (solo en FAILED).")
+
+
+class ErrorAPI(BaseModel):
+    """El cuerpo de un error de la API, como lo arma FastAPI."""
+
+    detail: str | list[dict[str, Any]] = Field(
+        description="Qué salió mal. En un 422, la lista de campos inválidos con su mensaje (`msg`)."
+    )
+
+
+_ERRORES = {
+    404: "No existe ese trabajo.",
+    409: "El trabajo no espera aprobación.",
+    422: "El cuerpo no pasó la validación.",
+    503: "No hay conexión con Redis; se puede reintentar.",
+}
+
+
+def respuestas_de_error(*codigos: int) -> dict[int | str, dict[str, Any]]:
+    """Las respuestas de error de un endpoint, para el `responses=` de FastAPI."""
+    return {codigo: {"model": ErrorAPI, "description": _ERRORES[codigo]} for codigo in codigos}
 
 
 class JobStore:
@@ -86,7 +159,8 @@ class JobStore:
         job = await self.obtener(job_id)
         if job is None:
             raise KeyError(job_id)
-        job = job.model_copy(update={**campos, "actualizado": _ahora()})
+        # model_validate y no model_copy: lo que manda el worker (dicts) se valida contra el modelo.
+        job = Job.model_validate({**job.model_dump(), **campos, "actualizado": _ahora()})
         await self._guardar(job)
         return job
 

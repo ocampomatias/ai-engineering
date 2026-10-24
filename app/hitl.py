@@ -18,6 +18,7 @@ con el LLM, para que un modelo confundido no pueda saltearse la revisión.
 """
 
 import asyncio
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -28,11 +29,13 @@ from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
 from langgraph.types import interrupt
-from pydantic import BaseModel, Field
+from pydantic import field_validator
 
 from agente.datos import BaseCobros, normalizar
 
-from .jobs import Job
+from .jobs import AccionGuardada, Job, RevisionGuardada, respuestas_de_error
+
+logger = logging.getLogger(__name__)
 
 _VERBO_REEMBOLSO = re.compile(r"\b(reembols|reintegr|devolv|devuelv)\w*")
 _ID_COBRO = re.compile(r"\bcob_[A-Z0-9]{5}\b")
@@ -40,17 +43,27 @@ _ID_COBRO = re.compile(r"\bcob_[A-Z0-9]{5}\b")
 RegistrarReembolso = Callable[[str, dict[str, Any]], Awaitable[bool]]
 
 
-class Accion(BaseModel):
-    tipo: Literal["reembolso"] = "reembolso"
-    cobro_ids: list[str] = Field(min_length=1)
+class Accion(AccionGuardada):
+    """La acción crítica que pide el pedido. Valida los IDs antes de llegar a la firma."""
+
+    @field_validator("cobro_ids")
+    @classmethod
+    def _ids_validos(cls, ids: list[str]) -> list[str]:
+        if invalidos := [i for i in ids if not _ID_COBRO.fullmatch(i)]:
+            raise ValueError(f"IDs de cobro con formato inválido (se espera cob_XXXXX): {invalidos}")
+        if len(set(ids)) != len(ids):
+            raise ValueError("hay IDs de cobro repetidos")
+        return ids
 
 
-class Revision(BaseModel):
+class Revision(RevisionGuardada):
     """La respuesta de la persona que revisa. Es lo que recibe `POST /tasks/{id}/approve`."""
 
-    aprobado: bool
-    revisor: str = Field(min_length=1, max_length=80)
-    comentario: str = Field(default="", max_length=500)
+    @field_validator("revisor", mode="before")
+    @classmethod
+    def _recortar_revisor(cls, valor: object) -> object:
+        # Antes de min_length: "  " queda vacío y se rechaza.
+        return valor.strip() if isinstance(valor, str) else valor
 
 
 def detectar_accion(pedido: str) -> Accion | None:
@@ -119,11 +132,18 @@ def crear_nodo_reembolso(registrar: RegistrarReembolso, base: BaseCobros | None 
 
 # --- Endpoint ----------------------------------------------------------------
 
-router = APIRouter()
+router = APIRouter(tags=["aprobación"])
 
 
-@router.post("/tasks/{job_id}/approve", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/tasks/{job_id}/approve",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Aprobar o rechazar el reembolso que espera la firma",
+    responses=respuestas_de_error(404, 409, 422, 503),
+)
 async def aprobar(job_id: str, revision: Revision, request: Request) -> Job:
+    """Encola la firma; el worker reanuda el grafo en el mismo thread_id. Solo pasa una firma por trabajo."""
+    logger.info("validación OK: revisión de %s (aprobado=%s)", revision.revisor, revision.aprobado)
     store = request.app.state.store
     job = await store.obtener(job_id)
     if job is None:

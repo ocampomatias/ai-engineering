@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -25,14 +26,16 @@ import pytest
 from fakeredis import FakeAsyncRedis
 from redis.asyncio import Redis as RedisAsync
 from redis.exceptions import ConnectionError as RedisConnectionError
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
+from pydantic import ValidationError
 from test_orquestador import SupervisorGuionado, decision
 
 from app import observability
 from app.graph import construir_grafo, serializador_redis
 from app.hitl import Accion, Revision, detectar_accion
-from app.jobs import COLA, PROCESANDO, REEMBOLSOS, EstadoJob, JobStore
+from app.jobs import COLA, PROCESANDO, REEMBOLSOS, EstadoJob, Job, JobStore
 from app.main import Recursos, crear_app
 from orquestador import Aporte
 
@@ -99,6 +102,7 @@ async def cliente(
     checkpointer: InMemorySaver | None = None,
     investigador: Any = None,  # noqa: ANN401
     revisar_cola: bool = True,
+    workers: int = 2,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """La API con sus workers. Para simular un reinicio, dos llamadas con el mismo `checkpointer`.
 
@@ -119,7 +123,7 @@ async def cliente(
         )
         yield Recursos(store, grafo)
 
-    app = crear_app(fabrica, workers=2)
+    app = crear_app(fabrica, workers=workers)
     async with app.router.lifespan_context(app):
         transporte = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transporte, base_url="http://test") as http:
@@ -128,8 +132,8 @@ async def cliente(
             assert await cola_vacia(redis), "quedaron mensajes en la cola o en proceso"
 
 
-async def esperar(http: httpx.AsyncClient, job_id: str, *estados: str) -> dict[str, Any]:
-    for _ in range(200):
+async def esperar(http: httpx.AsyncClient, job_id: str, *estados: str, intentos: int = 200) -> dict[str, Any]:
+    for _ in range(intentos):
         job = (await http.get(f"/tasks/{job_id}")).json()
         if job["estado"] in estados:
             return job
@@ -450,3 +454,133 @@ async def test_sin_redis_responde_503(redis: FakeAsyncRedis, monkeypatch: pytest
         monkeypatch.undo()
     assert salud.status_code == consulta.status_code == 503
     assert "Redis" in salud.json()["detail"]
+
+
+# --- Contrato de la API (Pydantic) ----------------------------------------------
+
+#: Los esquemas que arma FastAPI solo; no son modelos del proyecto.
+_DE_FASTAPI = {"HTTPValidationError", "ValidationError"}
+
+
+def _referencias(nodo: Any) -> set[str]:  # noqa: ANN401
+    """Los modelos que nombra un esquema, entrando por $ref, anyOf, allOf, items y properties."""
+    if isinstance(nodo, dict):
+        propias = {nodo["$ref"].rsplit("/", 1)[-1]} if "$ref" in nodo else set()
+        return propias.union(*(_referencias(v) for v in nodo.values()))
+    if isinstance(nodo, list):
+        return set().union(*(_referencias(v) for v in nodo))
+    return set()
+
+
+def test_cada_campo_de_la_api_tiene_descripcion() -> None:
+    esquema = crear_app(workers=1).openapi()
+    modelos = esquema["components"]["schemas"]
+    # Lo que expone la API, siguiendo las referencias hasta el fondo (Job -> Resultado -> Aporte...).
+    alcanzados: set[str] = set()
+    pendientes = _referencias(esquema["paths"])
+    while pendientes:
+        nombre = pendientes.pop()
+        alcanzados.add(nombre)
+        pendientes |= _referencias(modelos[nombre]) - alcanzados
+    propios = alcanzados - _DE_FASTAPI
+    assert {"Pedido", "Job", "Revision", "Resultado", "SolicitudAprobacion", "AccionGuardada",
+            "RevisionGuardada", "Aporte", "Decision", "Salud", "ErrorAPI"} <= propios
+    sin_descripcion = [
+        f"{nombre}.{campo}"
+        for nombre in sorted(propios)
+        for campo, definicion in modelos[nombre].get("properties", {}).items()
+        if not definicion.get("description")
+    ]
+    assert not sin_descripcion, sin_descripcion
+    assert esquema["info"]["version"] == "8.0.0"
+    for ruta, metodos in esquema["paths"].items():
+        for metodo, operacion in metodos.items():
+            assert operacion.get("summary") and operacion.get("tags"), f"{metodo.upper()} {ruta}"
+    respuestas = esquema["paths"]["/tasks/{job_id}/approve"]["post"]["responses"]
+    assert {"404", "409", "422", "503"} <= set(respuestas)
+    assert respuestas["409"]["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorAPI")
+
+
+async def test_los_validadores_recortan_y_rechazan_lo_vacio(redis: FakeAsyncRedis) -> None:
+    async with cliente(redis) as http:
+        assert (await http.post("/tasks", json={"pedido": "     "})).status_code == 422
+        assert (await http.post("/tasks", json={"pedido": "   ab   "})).status_code == 422  # 2 caracteres
+        r = await http.post("/tasks", json={"pedido": f"  {PEDIDO}\n"})
+        assert r.status_code == 202 and r.json()["pedido"] == PEDIDO
+        await esperar(http, r.json()["id"], "DONE")
+        sin_revisor = await http.post("/tasks/x/approve", json={"aprobado": True, "revisor": "  "})
+        assert sin_revisor.status_code == 422
+        assert (await http.get("/health")).json() == {"estado": "ok"}
+    assert Revision(aprobado=True, revisor=" ana ").revisor == "ana"
+    with pytest.raises(ValidationError, match="repetidos"):
+        Accion(cobro_ids=[APROBADO, APROBADO])
+    with pytest.raises(ValidationError, match="formato"):
+        Accion(cobro_ids=["cob_7e8q4"])
+
+
+def test_un_trabajo_guardado_antes_de_los_modelos_se_sigue_leyendo() -> None:
+    """Lo que hoy está en Redis: aprobación sin span_id y una firma que los validadores nuevos rechazarían."""
+    viejo = {
+        "id": "abc", "pedido": f"Reembolsá {APROBADO}", "estado": "DONE",
+        "creado": "2026-10-20T12:00:00Z", "actualizado": "2026-10-20T12:01:00Z",
+        "aprobacion": {"accion": {"tipo": "reembolso", "cobro_ids": [APROBADO]}, "analisis": "x", "pregunta": "?"},
+        "resultado": {
+            "respuesta_final": "ok", "resultado_accion": None,
+            "revision": {"aprobado": True, "revisor": "  ", "comentario": ""},
+            "decisiones": [decision("sintesis").model_dump()],
+            "aportes": [{"agente": "investigador", "instruccion": "x", "contenido": "y", "herramientas": [],
+                         "error": False, "ms": 1.0}],
+        },
+        "error": None,
+    }
+    job = Job.model_validate_json(json.dumps(viejo))
+    assert job.aprobacion is not None and job.aprobacion.span_id is None
+    assert json.loads(job.model_dump_json())["resultado"] == viejo["resultado"]  # mismas claves de ida y vuelta
+
+
+async def test_los_logs_de_validacion_y_tiempos(redis: FakeAsyncRedis, caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    pedido = f"Reembolsá {APROBADO}"
+    async with cliente(redis) as http:
+        job_id = (await http.post("/tasks", json={"pedido": pedido})).json()["id"]
+        await esperar(http, job_id, "WAITING_APPROVAL")
+        await http.post(f"/tasks/{job_id}/approve", json={"aprobado": True, "revisor": "ana"})
+        await esperar(http, job_id, "DONE")
+    assert f"validación OK: pedido de {len(pedido)} caracteres -> job {job_id} encolado en " in caplog.text
+    assert "validación OK: Decision | [supervisor] evalúa:" in caplog.text
+    assert f"[worker] {job_id} -> WAITING_APPROVAL en " in caplog.text
+    assert "validación OK: revisión de ana (aprobado=True)" in caplog.text
+    assert re.search(rf"\[worker\] {job_id} -> DONE en \d+,\d s", caplog.text)
+
+
+# --- Concurrencia --------------------------------------------------------------
+# Dos firmas simultáneas sobre el mismo trabajo (un 202, un 409, un solo reembolso) ya las cubre
+# test_la_firma_es_atomica_si_falla_el_encolado_se_puede_volver_a_firmar.
+
+
+class SupervisorPorPedido(SupervisorGuionado):
+    """Sin estado compartido entre pedidos: delega una vez al investigador con el pedido y después sintetiza."""
+
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        def decidir(mensajes: list[BaseMessage]) -> Any:  # noqa: ANN401
+            texto = str(mensajes[-1].content)
+            if "(todavía no hay aportes)" not in texto:
+                return decision("sintesis")
+            return decision("investigador", texto.split("PEDIDO DEL USUARIO:\n", 1)[1].split("\n\nAPORTES", 1)[0])
+
+        return RunnableLambda(decidir)
+
+
+async def test_veinte_pedidos_simultaneos_con_cinco_workers(redis: FakeAsyncRedis) -> None:
+    pedidos = [f"Analizá los cobros del comercio número {i}" for i in range(20)]
+    async with cliente(redis, modelo=SupervisorPorPedido(), workers=5) as http:  # al cerrar revisa cola y procesando
+        respuestas = await asyncio.gather(*(http.post("/tasks", json={"pedido": p}) for p in pedidos))
+        assert {r.status_code for r in respuestas} == {202}
+        ids = [r.json()["id"] for r in respuestas]
+        assert len(set(ids)) == 20
+        jobs = await asyncio.gather(*(esperar(http, i, "DONE", "FAILED", intentos=500) for i in ids))
+    for pedido, job in zip(pedidos, jobs, strict=True):
+        assert job["estado"] == "DONE"
+        # Cada trabajo tiene su propio aporte: los thread_id no se mezclan.
+        assert [(a["agente"], a["instruccion"]) for a in job["resultado"]["aportes"]] == [("investigador", pedido)]
+        assert [d["siguiente"] for d in job["resultado"]["decisiones"]] == ["investigador", "sintesis"]

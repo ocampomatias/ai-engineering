@@ -18,6 +18,7 @@ quedaría consultando para siempre un trabajo en RUNNING.
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -104,8 +105,8 @@ async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]
 
 async def _terminado(job: Job, resume: dict[str, Any] | None, resultado: dict[str, Any]) -> dict[str, Any]:
     """DONE; si fue una firma, la decisión queda anotada en el span que la pidió."""
-    if resume is not None and job.aprobacion and job.aprobacion.get("span_id"):
-        await anotar_firma(job.aprobacion["span_id"], resume)
+    if resume is not None and job.aprobacion and job.aprobacion.span_id:
+        await anotar_firma(job.aprobacion.span_id, resume)
     return {"estado": EstadoJob.DONE, "resultado": resultado, "aprobacion": None}
 
 
@@ -123,6 +124,7 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
     if job.estado in _TERMINADOS or (job.estado == EstadoJob.WAITING_APPROVAL and "resume" not in mensaje):
         logger.info("[worker] %s ya está en %s: descarto el mensaje repetido", job_id, job.estado)
         return
+    inicio = time.perf_counter()
     await store.actualizar(job_id, estado=EstadoJob.RUNNING)
     try:
         campos = await _ejecutar(grafo, job, mensaje)
@@ -131,7 +133,8 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
         error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
         campos = {"estado": EstadoJob.FAILED, "error": error}
     await store.actualizar(job_id, **campos)
-    logger.info("[worker] %s -> %s", job_id, campos["estado"])
+    segundos = f"{time.perf_counter() - inicio:.1f}".replace(".", ",")
+    logger.info("[worker] %s -> %s en %s s", job_id, campos["estado"], segundos)
 
 
 async def correr_worker(store: JobStore, grafo: CompiledStateGraph, nombre: str) -> None:

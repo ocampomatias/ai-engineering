@@ -27,7 +27,7 @@ Destino = Literal["investigador", "analista", "sintesis"]
 class Aporte(BaseModel):
     """Lo que devolvió un especialista para una instrucción del supervisor."""
 
-    agente: Especialista
+    agente: Especialista = Field(description="Qué especialista lo hizo.")
     instruccion: str = Field(min_length=1, description="La tarea que le dio el supervisor.")
     contenido: str = Field(min_length=1, description="El resultado, o el error si falló.")
     herramientas: list[str] = Field(description="Herramientas que llamó, en orden.")
