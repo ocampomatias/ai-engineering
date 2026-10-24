@@ -175,12 +175,15 @@ siempre. Lo resolví con dos piezas chicas:
 El grafo corre con `durability="sync"`: cada paso queda guardado antes de seguir, y al retomar no se
 paga dos veces un nodo que ya terminó. Un mensaje de un trabajo `DONE` o `FAILED` se descarta.
 
-Un corte momentáneo de Redis (`ConnectionError` o `TimeoutError`, dentro del grafo o al guardar el
-estado) no es una falla del trabajo: el worker espera 2 s y devuelve el mensaje a la punta de salida
-de la cola en una transacción (`JobStore.devolver`), y la tabla de arriba decide por dónde seguir. El
-mensaje lleva la cuenta (`intentos`): vuelve a la cola hasta `MAX_REINTENTOS_REDIS` (3) veces, y con
-el corte siguiente el trabajo termina en `FAILED` ("Redis se cortó 4 veces durante el trabajo; …").
-Sin ese tope, un checkpoint que nunca se puede escribir pagaría el mismo nodo del LLM sin fin. Es
+Un corte momentáneo de Redis (`ConnectionError` o `TimeoutError`, dentro del grafo, al leer el
+trabajo o al guardar su estado) no es una falla del trabajo: el worker devuelve el mensaje a la punta
+de salida de la cola (`JobStore.devolver`) y la tabla de arriba decide por dónde seguir. Si Redis
+sigue caído, reintenta la devolución con esperas de 2 s que se duplican hasta 30 s; con Redis caído
+no tiene otra cosa que hacer. La devolución es idempotente (`WATCH` + `LPOS` + `MULTI`): solo encola
+si el mensaje sigue en `procesando`, así una respuesta perdida no lo duplica. El mensaje lleva la
+cuenta (`intentos`): cuando vuelve por cuarta vez (`MAX_REINTENTOS_REDIS` es 3), el worker lo
+marca `FAILED` ("Redis se cortó 4 veces durante el trabajo; …") sin correr el grafo. Sin ese tope,
+un checkpoint que nunca se puede escribir pagaría el mismo nodo del LLM sin fin. Es
 seguro porque el checkpoint no repite lo que ya terminó y el reembolso es idempotente: si `HSETNX`
 encuentra el cobro registrado por el mismo trabajo, lo informa como registrado; si lo registró otro,
 "ya tenía un reembolso registrado, no se duplica".
@@ -293,8 +296,8 @@ Ningún id de modelo o de índice está en la lógica; los valores por defecto v
 python -m pytest -q
 ```
 
-Son 252 tests, sin API keys, sin red y sin Redis real (`fakeredis`, `InMemorySaver` y modelos
-guionados). Los 32 nuevos cubren la recuperación tras un reinicio (con el trabajo en `RUNNING`, con
+Son 255 tests, sin API keys, sin red y sin Redis real (`fakeredis`, `InMemorySaver` y modelos
+guionados). Los 35 nuevos cubren la recuperación tras un reinicio (con el trabajo en `RUNNING`, con
 el grafo ya terminado y durante la firma), los cortes de Redis a mitad de un trabajo, la firma con el
 checkpoint vencido, la cola confiable, el esquema exhaustivo, los validadores, los reintentos, los
 logs y la concurrencia.
@@ -341,8 +344,8 @@ El workflow [`.github/workflows/sistema.yml`](.github/workflows/sistema.yml) cor
   alcanza; en producción iría detrás de un login.
 - **`create_react_agent` está deprecado** en LangGraph y desaparece en la 2.0. Lo dejé fijado con
   `langgraph-prebuilt==1.1.0`; migrar a `create_agent` es el próximo paso.
-- **Si Redis no deja ni devolver el mensaje ni guardar el `FAILED`**, el trabajo queda en `RUNNING`
-  con el mensaje en `tambor:procesando` hasta el próximo arranque, que lo recupera.
+- **Si la API se apaga durante un corte de Redis**, el mensaje queda en `tambor:procesando` y el
+  trabajo en `RUNNING` hasta el próximo arranque, que lo recupera.
 - **Una firma que llega después de `CHECKPOINT_TTL_MIN`** (un día) termina en `FAILED`: el trabajo
   dura 7 días pero su checkpoint no, y hay que volver a mandar el pedido.
 - **El modelo es `claude-haiku-4-5`.** `claude-haiku-5-5` sería unas 10 veces más barato, pero
@@ -689,7 +692,7 @@ ver [Persistencia y recuperación tras un reinicio](#persistencia-y-recuperació
 python -m pytest -q tests/test_api.py
 ```
 
-Son 28 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
+Son 31 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
 `InMemorySaver`, y los modelos son los guionados de la pre-entrega 6. La API se prueba por HTTP
 con los workers corriendo. Cubren:
 
@@ -705,12 +708,13 @@ con los workers corriendo. Cubren:
 - un corte de Redis: `/health` y `/tasks/{id}` responden `503` con mensaje, no `500`;
 - lo de la entrega final: la cola confiable, los tres reinicios (con el trabajo en `RUNNING`, con
   el grafo ya terminado y durante la firma), los cortes de Redis dentro del grafo y al guardar el
-  estado (se reintenta y termina `DONE`; un corte que no se va termina `FAILED` tras 3 reintentos),
+  estado (se reintenta y termina `DONE`, aunque la devolución a la cola también falle; un corte que no
+  se va termina `FAILED` tras 3 reintentos), la devolución idempotente,
   la firma con el checkpoint vencido, el reembolso que registró el mismo trabajo antes de una caída,
   el esquema exhaustivo del OpenAPI, los validadores, los
   logs con tiempos y 20 pedidos simultáneos con 5 workers.
 
-Con los de las pre-entregas anteriores son 252:
+Con los de las pre-entregas anteriores son 255:
 
 ```bash
 python -m pytest -q
@@ -745,7 +749,7 @@ evidencia/
   hitl_api_rechazado.json
   log_api.log               el log de la API durante las pruebas de la pre-entrega 7
   grafo_api.mmd             el diagrama del grafo, generado desde el código
-tests/test_api.py           28 tests sin API keys
+tests/test_api.py           31 tests sin API keys
 ```
 
 # Pre-entrega 6: orquestador multi-agente con supervisor

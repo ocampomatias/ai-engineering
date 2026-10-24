@@ -4,8 +4,10 @@
 services:
   redis:
     image: redis:8.4.7  # Redis 8 trae Query Engine y JSON, que usa AsyncRedisSaver
-    # AOF: cada escritura queda en disco (el registro de reembolsos es la idempotencia; no puede perderse).
+    # AOF (fsync cada segundo): ante un corte se pierde a lo sumo 1 s de escrituras, no la última
+    # instantánea. El registro de reembolsos es la idempotencia.
     command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
     # Sin puerto publicado: la API lo ve por la red del compose y no choca con un Redis local.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

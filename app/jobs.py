@@ -210,20 +210,31 @@ class JobStore:
         """El trabajo terminó y su estado quedó guardado: el mensaje sale de "en proceso"."""
         await self.redis.lrem(PROCESANDO, 1, crudo)
 
-    async def devolver(self, crudo: str) -> None:
+    async def devolver(self, crudo: str) -> bool:
         """Redis se cortó a mitad del trabajo: el mensaje vuelve de "en proceso" a la cola con
         `intentos` + 1 (el nuevo reemplaza al viejo en la misma transacción).
 
-        RPUSH lo deja en la punta de la que saca BLMOVE: se retoma antes que los pedidos nuevos.
-        Si el LREM no encuentra nada (el `confirmar` llegó a Redis pero no su respuesta), el
-        mensaje queda repetido y el worker lo descarta porque el trabajo ya está resuelto.
+        Idempotente: solo encola si `crudo` sigue en "en proceso" (WATCH + LPOS + MULTI). Si un
+        EXEC se aplicó y se perdió la respuesta, el reintento no duplica el mensaje. False si ya
+        no estaba. RPUSH lo deja en la punta de la que saca BLMOVE: se retoma antes que lo nuevo.
+        shortcut: WATCH y no un script Lua porque fakeredis no trae Lua sin `lupa`; con muchos
+        workers el WATCH choca más seguido (se reintenta en el acto).
         """
         mensaje = json.loads(crudo)
         nuevo = json.dumps({**mensaje, "intentos": mensaje.get("intentos", 0) + 1})
         async with self.redis.pipeline(transaction=True) as tx:
-            tx.lrem(PROCESANDO, 1, crudo)
-            tx.rpush(COLA, nuevo)
-            await tx.execute()
+            while True:
+                await tx.watch(PROCESANDO)
+                if await tx.lpos(PROCESANDO, crudo) is None:
+                    return False
+                tx.multi()
+                tx.lrem(PROCESANDO, 1, crudo)
+                tx.rpush(COLA, nuevo)
+                try:
+                    await tx.execute()
+                    return True
+                except WatchError:  # otro worker tocó "en proceso" (BLMOVE, LREM): de nuevo
+                    continue
 
     async def recuperar(self) -> int:
         """Devuelve a la cola lo que quedó en "en proceso" (caída o reinicio). Llamar antes de los workers.

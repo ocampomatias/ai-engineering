@@ -41,9 +41,10 @@ logger = logging.getLogger(__name__)
 TIMEOUT_JOB_S = float(os.getenv("JOB_TIMEOUT_S", "300"))
 #: RECURSION_LIMIT de la pre-entrega 6 más los dos nodos de aprobación y reembolso.
 LIMITE_PASOS = RECURSION_LIMIT + 2
-#: Espera antes de reintentar cuando Redis no responde.
+#: Espera antes de reintentar cuando Redis no responde; al devolver un mensaje se duplica hasta el tope.
 ESPERA_REINTENTO_S = 2.0
-#: Veces que un trabajo vuelve a la cola por un corte de Redis; con el corte siguiente, FAILED.
+ESPERA_MAXIMA_S = 30.0
+#: Veces que un trabajo vuelve a la cola por un corte de Redis; la siguiente, FAILED sin correr el grafo.
 #: Sin tope, una escritura del checkpoint que falla siempre pagaría el nodo del LLM sin fin.
 MAX_REINTENTOS_REDIS = 3
 #: La firma llegó y el checkpoint ya no está (vence a CHECKPOINT_TTL_MIN; el trabajo dura 7 días).
@@ -140,20 +141,17 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
     if job.estado in _TERMINADOS or (job.estado == EstadoJob.WAITING_APPROVAL and "resume" not in mensaje):
         logger.info("[worker] %s ya está en %s: descarto el mensaje repetido", job_id, job.estado)
         return
+    if (intentos := mensaje.get("intentos", 0)) > MAX_REINTENTOS_REDIS:
+        error = f"Redis se cortó {intentos} veces durante el trabajo; se puede volver a mandar el pedido"
+        logger.error("[worker] %s: %s", job_id, error)
+        await store.actualizar(job_id, estado=EstadoJob.FAILED, error=error, aprobacion=None)
+        return
     inicio = time.perf_counter()
     await store.actualizar(job_id, estado=EstadoJob.RUNNING)
     try:
         campos = await _ejecutar(grafo, job, mensaje)
-    except REDIS_TRANSITORIO as exc:
-        intentos = mensaje.get("intentos", 0)
-        if intentos < MAX_REINTENTOS_REDIS:
-            raise  # no es una falla del trabajo: correr_worker devuelve el mensaje a la cola
-        logger.exception("[worker] %s: Redis se cortó %s veces, se abandona", job_id, intentos + 1)
-        error = (
-            f"Redis se cortó {intentos + 1} veces durante el trabajo; se puede volver a mandar el pedido "
-            f"(último error: {type(exc).__name__}: {exc})"
-        )
-        campos = {"estado": EstadoJob.FAILED, "error": error}
+    except REDIS_TRANSITORIO:
+        raise  # no es una falla del trabajo: correr_worker devuelve el mensaje a la cola
     except Exception as exc:  # cualquier falla, del grafo o después, termina en FAILED y nunca en RUNNING
         logger.exception("[worker] %s falló", job_id)
         error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
@@ -179,24 +177,29 @@ async def correr_worker(store: JobStore, grafo: CompiledStateGraph, nombre: str)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # nunca matar al worker
-            # Pasado el tope no se devuelve: si ni el FAILED se pudo guardar, lo recupera el próximo arranque.
-            devolver = (
-                crudo is not None
-                and isinstance(exc, REDIS_TRANSITORIO)
-                and mensaje.get("intentos", 0) < MAX_REINTENTOS_REDIS
-            )
+            if crudo is not None and isinstance(exc, REDIS_TRANSITORIO):
+                logger.warning("[%s] Redis no respondió a mitad de un trabajo; vuelve a la cola", nombre,
+                               exc_info=True)
+                await _devolver_cuando_se_pueda(store, crudo, nombre)
+                continue
             if crudo is None:
                 logger.exception("[%s] error leyendo la cola; reintento en %g s", nombre, ESPERA_REINTENTO_S)
-            elif devolver:
-                logger.warning(
-                    "[%s] Redis no respondió a mitad de un trabajo; vuelve a la cola en %g s",
-                    nombre, ESPERA_REINTENTO_S, exc_info=True,
-                )
             else:
                 logger.exception("[%s] error con un trabajo; queda en proceso hasta el próximo arranque", nombre)
             await asyncio.sleep(ESPERA_REINTENTO_S)
-            if devolver:
-                try:
-                    await store.devolver(crudo)
-                except Exception:  # sigue en "en proceso": lo devuelve `recuperar` al próximo arranque
-                    logger.exception("[%s] no se pudo devolver el mensaje a la cola", nombre)
+
+
+async def _devolver_cuando_se_pueda(store: JobStore, crudo: str, nombre: str) -> None:
+    """Reintenta `devolver` hasta que Redis vuelva: con Redis caído el worker no tiene otra cosa que hacer.
+
+    Al apagar, la cancelación corta la espera y el mensaje queda en "en proceso" para `recuperar`.
+    """
+    espera = ESPERA_REINTENTO_S
+    while True:
+        await asyncio.sleep(espera)
+        try:
+            await store.devolver(crudo)
+            return
+        except Exception:
+            espera = min(espera * 2, ESPERA_MAXIMA_S)
+            logger.warning("[%s] no se pudo devolver el mensaje; reintento en %g s", nombre, espera, exc_info=True)

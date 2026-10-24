@@ -434,6 +434,7 @@ async def test_la_firma_con_el_checkpoint_vencido_falla_sin_llamar_al_modelo(red
 @pytest.fixture
 def espera_corta(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.worker.ESPERA_REINTENTO_S", 0.01)
+    monkeypatch.setattr("app.worker.ESPERA_MAXIMA_S", 0.02)
 
 
 async def test_un_corte_de_redis_al_guardar_el_estado_se_reintenta(
@@ -683,6 +684,56 @@ async def test_un_corte_de_redis_persistente_termina_en_failed_tras_el_tope(
         job = await esperar(http, job_id, "DONE", "FAILED")
     assert job["estado"] == "FAILED"
     assert job["error"].startswith(f"Redis se cortó {MAX_REINTENTOS_REDIS + 1} veces durante el trabajo")
-    assert "ConnectionError: Redis no vuelve" in job["error"]
     assert len(intentos) == MAX_REINTENTOS_REDIS + 1  # el primero y los 3 reintentos
     assert len(modelo.vistos) == 1  # solo la primera decisión del supervisor; los reintentos no pagan LLM
+
+
+async def test_si_devolver_falla_se_reintenta_hasta_poder_sin_duplicar(
+    redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch, espera_corta: None
+) -> None:
+    actualizar, devolver = JobStore.actualizar, JobStore.devolver
+    cortes = []
+
+    async def actualizar_con_corte(self: JobStore, job_id: str, **campos: Any) -> Job:  # noqa: ANN401
+        if campos.get("estado") == EstadoJob.DONE and not cortes:
+            cortes.append("actualizar")
+            raise RedisConnectionError("se cortó Redis al guardar DONE")
+        return await actualizar(self, job_id, **campos)
+
+    async def devolver_con_cortes(self: JobStore, crudo: str) -> bool:
+        if cortes.count("devolver") < 2:  # Redis sigue caído las dos primeras veces
+            cortes.append("devolver")
+            raise RedisConnectionError("Redis todavía no vuelve")
+        return await devolver(self, crudo)
+
+    monkeypatch.setattr(JobStore, "actualizar", actualizar_con_corte)
+    monkeypatch.setattr(JobStore, "devolver", devolver_con_cortes)
+    modelo = guion()
+    async with cliente(redis, modelo=modelo, workers=1) as http:  # al cerrar, revisa cola y "en proceso" vacías
+        job_id = (await http.post("/tasks", json={"pedido": PEDIDO})).json()["id"]
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert cortes == ["actualizar", "devolver", "devolver"]
+    assert job["estado"] == "DONE" and job["error"] is None
+    assert len(modelo.vistos) == 3
+
+
+async def test_pasado_el_tope_falla_sin_correr_el_grafo(redis: FakeAsyncRedis) -> None:
+    job = await JobStore(redis).crear(PEDIDO)
+    await redis.delete(COLA)
+    await redis.lpush(COLA, json.dumps({"job_id": job.id, "intentos": MAX_REINTENTOS_REDIS + 1}))
+    modelo = guion()
+    async with cliente(redis, modelo=modelo) as http:
+        final = await esperar(http, job.id, "DONE", "FAILED")
+    assert final["estado"] == "FAILED"
+    assert final["error"].startswith(f"Redis se cortó {MAX_REINTENTOS_REDIS + 1} veces durante el trabajo")
+    assert modelo.vistos == []
+
+
+async def test_devolver_es_idempotente(redis: FakeAsyncRedis) -> None:
+    store = JobStore(redis)
+    crudo = json.dumps({"job_id": "a"})
+    await redis.lpush(PROCESANDO, crudo)
+    assert await store.devolver(crudo)
+    assert not await store.devolver(crudo)  # el EXEC anterior se aplicó: no se duplica
+    assert await redis.llen(PROCESANDO) == 0
+    assert [json.loads(m) for m in await redis.lrange(COLA, 0, -1)] == [{"job_id": "a", "intentos": 1}]
