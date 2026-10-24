@@ -2,6 +2,7 @@
 
 | Entrega | Qué es | Dónde |
 |---|---|---|
+| [Entrega final](#entrega-final-the-intelligence-system) | Las siete capas como un solo sistema: recuperación tras un reinicio, arranque en una instrucción probado en CI, Pydantic exhaustivo, reintentos y evidencia con p95 y costo | `run.sh`, `.github/workflows/sistema.yml`, `app/`, `evidencia/`, `screenshots/` |
 | Pre-entrega 7 | API de producción: FastAPI asíncrona, estado y checkpoints en Redis, trazas en Phoenix y aprobación humana | `app/`, `probar_api.py`, `screenshots/` |
 | Pre-entrega 6 | Orquestador multi-agente con LangGraph: supervisor, investigador y analista con estado compartido | `orquestador/`, `probar_orquestador.py`, `demo_orquestador.ipynb` |
 | Pre-entrega 5 | Agente ReAct con LangGraph: herramientas propias, razonamiento en varios pasos y memoria en SQLite | `agente/`, `probar_agente.py`, `chat_agente.py` |
@@ -10,8 +11,331 @@
 | Pre-entrega 2 | Pipeline de extracción de entidades técnicas con LangChain y Pydantic | `pipeline/`, `probar_pipeline.py` |
 | Pre-entrega 1 | Cliente asíncrono unificado para OpenAI y Anthropic | `llm_client/`, `main.py` |
 
-La instalación y las variables de entorno son las mismas para las siete: están en
-[Instalación](#instalación) y [Variables de entorno](#variables-de-entorno).
+La instalación y las variables de entorno son las mismas para todas: están en
+[Instalación](#instalación) y [Variables de entorno del sistema](#variables-de-entorno-del-sistema).
+
+# Entrega final: The Intelligence System
+
+[![Sistema](https://github.com/ocampomatias/ai-engineering/actions/workflows/sistema.yml/badge.svg)](https://github.com/ocampomatias/ai-engineering/actions/workflows/sistema.yml)
+
+Las siete pre-entregas ya eran un solo sistema: la API de la 7 corre el orquestador de la 6, cuyo
+investigador usa las herramientas del agente de la 5 y el RAG híbrido en Pinecone de la 4. Para la
+entrega final cerré lo que faltaba para que se pueda usar en serio: que un trabajo no se pierda si la
+API se cae, que arranque con una instrucción (y que eso esté probado en un servidor limpio), Pydantic
+en cada borde, reintentos donde no había, y evidencia real con latencia p95 y costo por pedido. Cada
+pre-entrega mantiene su sección con el detalle, más abajo.
+
+## Qué resuelve
+
+Tambor es una empresa ficticia de cobros. Su equipo de Atención a Comercios le pide cosas como esta:
+
+> Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el
+> monto de cada uno.
+
+Ese pedido necesita varios pasos y dos fuentes. El supervisor manda al investigador a la base de
+cobros (SQLite): uno está aprobado por 8.700,00 ARS y el otro rechazado con el código TMB-2031.
+Vuelve a mandarlo, ahora a la documentación (el RAG híbrido), para saber qué significa ese código y
+si un cobro rechazado se puede reembolsar (no se puede: TMB-4090). Con eso, la síntesis redacta el
+análisis y el grafo **se detiene a esperar la firma de una persona**: mover plata nunca lo decide el
+LLM. Al aprobar, el nodo `reembolso` valida cada cobro contra la base y registra solo el que
+corresponde. Es exactamente el trabajo de `evidencia/reinicio_api.json`, con un reinicio de la API
+en el medio.
+
+## Arranque en una instrucción
+
+```bash
+./run.sh
+```
+
+Si no hay `.env`, lo crea desde `.env.example` y pide completar `ANTHROPIC_API_KEY`. Con el `.env`
+listo, levanta API + Redis 8 + Phoenix con Docker Compose e imprime las URLs: la consola en
+http://localhost:8000, la documentación de la API en http://localhost:8000/docs y Phoenix en
+http://localhost:6006. `PINECONE_API_KEY` es opcional: sin ella, el investigador busca con BM25 local
+sobre el mismo `corpus/`, y el log de arranque lo dice (`documentación: bm25-local` o
+`documentación: pinecone-hibrido`). Es lo mismo que `docker compose up --build` con un `.env`.
+
+**Sin Docker**, con el entorno instalado ([Instalación](#instalación)) y `REDIS_URL` apuntando a un
+Redis 8 (yo usé el plan gratis de Redis Cloud, ver [cómo se consigue](#correrlo)), son tres comandos,
+cada uno en su terminal:
+
+```bash
+pip install -r requirements.txt
+phoenix serve                      # en otra terminal
+uvicorn app.main:app --port 8000   # en otra terminal
+```
+
+## El grafo de agentes
+
+Es el de `app/graph.py`. El esqueleto de nodos y aristas lo genera el propio código
+(`construir_grafo(...).get_graph().draw_mermaid()`, en [`evidencia/grafo_api.mmd`](evidencia/grafo_api.mmd));
+acá le agregué lo que cuelga de cada especialista:
+
+```mermaid
+flowchart TD
+    inicio([inicio]) --> supervisor
+    supervisor -.->|delega| investigador
+    supervisor -.->|delega| analista
+    supervisor -.->|ya alcanza| sintesis
+    investigador --> supervisor
+    analista --> supervisor
+    sintesis -.->|consulta| fin([fin])
+    sintesis -.->|pide reembolso| aprobacion["aprobacion<br/>interrupt: espera la firma"]
+    aprobacion -.->|rechazado| fin
+    aprobacion -.->|aprobado| reembolso["reembolso<br/>HSETNX + RetryPolicy"]
+    reembolso --> fin
+
+    investigador --- hi
+    subgraph hi [herramientas del investigador]
+        bc[buscar_comercio] --> db[(SQLite: base de cobros)]
+        lc[listar_cobros] --> db
+        cc[consultar_cobro] --> db
+        bd[buscar_documentacion] --> rag
+        subgraph rag [RAG híbrido]
+            pc[(Pinecone: vectorial)] --> ens[EnsembleRetriever: RRF]
+            bm[BM25] --> ens
+        end
+    end
+
+    analista --- ha
+    subgraph ha [herramientas del analista]
+        est[estadisticas_cobros]
+        calc[calcular]
+    end
+```
+
+El supervisor delega como mucho 6 veces por pedido; los especialistas siempre vuelven a él. La
+firma la pide una regla fija (`detectar_accion` en `app/hitl.py`: verbo de reembolso + IDs
+`cob_XXXXX`), no el modelo. Sin `PINECONE_API_KEY`, la parte vectorial no está y queda solo BM25.
+
+## Arquitectura del sistema
+
+```mermaid
+flowchart LR
+    C[consola web o curl] -->|POST /tasks, GET /tasks/id, POST /approve| A
+    subgraph P [un proceso: uvicorn app.main:app]
+        A[FastAPI]
+        W[5 workers asyncio]
+        G[grafo LangGraph]
+        W -->|ainvoke, thread_id = job_id| G
+    end
+    subgraph R [Redis 8]
+        Q[(tambor:cola)]
+        EP[(tambor:procesando)]
+        J[(tambor:job:id)]
+        CK[(checkpoints)]
+        RE[(tambor:reembolsos)]
+    end
+    A -->|SET + LPUSH en MULTI| Q
+    Q -->|BLMOVE| EP
+    EP -->|toma y confirma con LREM| W
+    W -->|estado del trabajo| J
+    G -->|AsyncRedisSaver| CK
+    G -->|HSETNX| RE
+    G -->|to_thread| S[(SQLite)]
+    G -->|to_thread| PC[(Pinecone)]
+    G -->|HTTPS| L[Anthropic: claude-haiku-4-5]
+    A -.->|OTLP| PH[Phoenix]
+    G -.->|OTLP| PH
+```
+
+## Mapa de capas (M1 a M7)
+
+No moví ningún paquete: cada pre-entrega es una capa que la siguiente importa. Un proceso, un grafo,
+una cola.
+
+| Capa | Paquete | Qué le da al sistema | Detalle |
+|---|---|---|---|
+| M7 | `app/` | API, cola confiable, workers, checkpointer de Redis, firma humana, trazas | [Pre-entrega 7](#pre-entrega-7-api-de-producción-con-redis-phoenix-y-aprobación-humana) |
+| M6 | `orquestador/` | Supervisor, especialistas con reintentos, síntesis, estado compartido | [Pre-entrega 6](#pre-entrega-6-orquestador-multi-agente-con-supervisor) |
+| M5 | `agente/` | Las 4 herramientas del investigador y la base de cobros en SQLite | [Pre-entrega 5](#pre-entrega-5-agente-react-con-langgraph-y-memoria-en-sqlite) |
+| M4 | `rag_pinecone/` | El recuperador híbrido (BM25 + vectorial) que usa `buscar_documentacion` | [Pre-entrega 4](#pre-entrega-4-rag-escalable-en-pinecone-con-búsqueda-híbrida) |
+| M3 | `rag/` | Limpieza, chunking y embeddings locales (fastembed) que reusa la 4 | [Pre-entrega 3](#pre-entrega-3-sistema-rag-local-con-chromadb) |
+| M2 | `pipeline/` | `crear_modelo` y la lista de errores que se reintentan | [Pre-entrega 2](#pre-entrega-2-pipeline-de-extracción-de-entidades-técnicas) |
+| M1 | `llm_client/` | Proveedor, modelo y keys desde el entorno, validados con Pydantic | [Pre-entrega 1](#pre-entrega-1-unified-async-llm-client) |
+
+## Persistencia y recuperación tras un reinicio
+
+En la pre-entrega 7, si la API se caía con un trabajo en `RUNNING`, ese trabajo quedaba así para
+siempre. Lo resolví con dos piezas chicas:
+
+- **Cola confiable.** El worker toma el mensaje con `BLMOVE tambor:cola → tambor:procesando` y lo
+  saca de ahí (`LREM`) recién después de guardar el estado final. Al arrancar, antes de lanzar los
+  workers, la API devuelve a la cola todo lo que quedó en `procesando`.
+- **El checkpoint decide por dónde seguir**, no el tipo de mensaje (`app/worker.py`):
+
+| Estado del checkpoint del `thread_id` | Qué hace el worker | Span en Phoenix |
+|---|---|---|
+| No hay checkpoint | Arranca de cero con el pedido | `pedido` |
+| Interrupción pendiente y el mensaje trae `resume` | `Command(resume=...)`: la firma normal | `firma` |
+| Interrupción pendiente y el mensaje no trae `resume` | Vuelve a `WAITING_APPROVAL` sin llamar al LLM | ninguno |
+| Tiene `next` (quedó a mitad de camino) | `ainvoke(None, config)`: retoma desde el último paso guardado | `reanudacion`, etiqueta `recuperado` |
+| Sin `next` y con valores (terminó pero no se guardó) | Marca `DONE` con esos valores, sin llamar al LLM | ninguno |
+
+El grafo corre con `durability="sync"`: cada paso queda guardado antes de seguir, y al retomar no se
+paga dos veces un nodo que ya terminó. Un mensaje de un trabajo `DONE` o `FAILED` se descarta.
+
+**La prueba real** (`python probar_api.py --reinicio`, en
+[`evidencia/reinicio_api.json`](evidencia/reinicio_api.json) y
+[`evidencia/log_reinicio_api.log`](evidencia/log_reinicio_api.log)): con el pedido de reembolso de
+arriba, maté la API con `kill()` (sin apagado ordenado) justo cuando el investigador empezaba, con el
+trabajo en `RUNNING`. Al levantarla de nuevo:
+
+```
+[recuperación] 1 mensaje(s) vuelven a la cola
+[worker] 26347407df304fec85183728e93497d9 reanuda desde el checkpoint (siguiente: investigador)
+[worker] 26347407df304fec85183728e93497d9 -> WAITING_APPROVAL en 75,8 s
+validación OK: revisión de probar_api.py (aprobado=True)
+[worker] 26347407df304fec85183728e93497d9 -> DONE en 5,4 s
+```
+
+La primera decisión del supervisor no se repitió. En el resultado, `cob_7F3K2` sale rechazado
+("solo se reembolsan cobros aprobados") y `cob_7E8Q4` sale "ya tenía un reembolso registrado, no se
+duplica": se había reembolsado en la prueba de la pre-entrega 7, así que es la idempotencia
+(`HSETNX`) funcionando entre corridas. El span raíz de la API que maté no llega a Phoenix, porque el proceso
+murió antes de exportarlo. Es lo que pasa en una caída real; la sesión del trabajo sí muestra la
+reanudación y la firma (captura 13).
+
+## Observabilidad: pruebas con trazas, latencia y costo
+
+**5 pedidos concurrentes** (`python probar_api.py --carga`, en
+[`evidencia/salida_carga_final.txt`](evidencia/salida_carga_final.txt) y
+[`evidencia/carga_api.json`](evidencia/carga_api.json)), contra Redis Cloud, Phoenix local y
+`claude-haiku-4-5`. Los 5 terminaron en `DONE`:
+
+| | p50 | p95 |
+|---|---|---|
+| Latencia total del trabajo | 41,6 s | 66,3 s |
+| `POST /tasks` | 1,09 s | 1,20 s |
+
+Con 5 muestras, el p95 por rango más cercano es la más lenta. Todos juntos tardaron 66,4 s; uno
+detrás del otro habrían sido 229,9 s. Según Phoenix, cada pedido costó entre USD 0,02 y 0,04, y los
+5 juntos USD 0,15. Toda la evidencia de esta entrega (reinicio, carga y las repeticiones) costó unos
+USD 0,35.
+
+| Captura | Qué muestra |
+|---|---|
+| [`11_phoenix_carga_latencia_costo.png`](screenshots/11_phoenix_carga_latencia_costo.png) | La vista Sessions: un trabajo por fila con su latencia y su costo. Las 5 primeras filas son la carga |
+| [`12_phoenix_rag_pinecone.png`](screenshots/12_phoenix_rag_pinecone.png) | El span `buscar_documentacion`: el `EnsembleRetriever` con el VectorStore de Pinecone + BM25, y la salida con `"buscador": "pinecone-hibrido"` |
+| [`13_phoenix_sesion_recuperada.png`](screenshots/13_phoenix_sesion_recuperada.png) | La sesión del trabajo recuperado: el turno `reanudacion` (`{"siguiente": ["investigador"]}`) hasta "Esperando firma humana", con la anotación `aprobacion_humana` 1.00, y el turno `firma` |
+| [`14_phoenix_proyecto.png`](screenshots/14_phoenix_proyecto.png) | Los totales del proyecto `tambor-api` |
+
+Las capturas 01 a 10 son de la [pre-entrega 7](#observabilidad-appobservabilitypy): trazas completas,
+sesiones por trabajo, la anotación de la firma y la consola.
+
+**Un hallazgo.** El SDK de Anthropic 1.15 emite su propio span de OpenTelemetry por cada llamada, y
+Phoenix contaba el costo dos veces (el de ese span y el de LangChain). Lo apagué con
+`ANTHROPIC_OPEN_TELEMETRY=false` en `app/observability.py` y repetí la carga. Por eso el costo de la
+sesión de la captura 13, y de las sesiones anteriores a las 21:40 del 23-oct, aparece duplicado en
+Phoenix.
+
+## Robustez
+
+- **Async de punta a punta.** `redis.asyncio`, `AsyncRedisSaver`, y `asyncio.to_thread` para lo que
+  es síncrono: SQLite, Pinecone e iniciar y cerrar las trazas. Ningún endpoint bloquea el event loop.
+- **Pydantic en cada borde.** Descripción en cada campo de la API (`Pedido`, `Job`, `Resultado`,
+  `SolicitudAprobacion`, `Revision`, `Accion`, `Salud`, `ErrorAPI`) y validadores propios: el pedido
+  y el revisor se recortan y no pueden quedar vacíos, los `cobro_ids` sin repetidos y con formato
+  `cob_XXXXX`. `test_cada_campo_de_la_api_tiene_descripcion` recorre el OpenAPI y falla si a algún
+  campo le falta. Las salidas de las 6 herramientas también se validan con un modelo antes de
+  volver al LLM.
+- **Logs con tiempos.** `validación OK: pedido de 112 caracteres -> job ... encolado en 272.0 ms`,
+  `validación OK: consultar_cobro -> SalidaConsultarCobro en 3.8 ms` y
+  `[worker] <id> -> DONE en 5,4 s`, entre otros, en `evidencia/log_reinicio_api.log`.
+- **Reintentos.** Los especialistas reintentan cada llamada al LLM ante errores transitorios (429,
+  5xx, 529, cortes de red) con `with_retry`, 3 intentos; un 401 no se reintenta. El supervisor y la
+  síntesis ya lo hacían. El nodo `reembolso` tiene un `RetryPolicy` de LangGraph ante caídas de Redis,
+  seguro porque `HSETNX` es idempotente.
+- **Concurrencia.** La firma es atómica (`WATCH` + `MULTI`): dos firmas a la vez dan un `202` y un
+  `409`, y un solo reembolso. Hay tests de 20 pedidos simultáneos con 5 workers (cada trabajo con sus
+  propios aportes) y de 20 consultas simultáneas a la misma base SQLite.
+
+## Variables de entorno del sistema
+
+Ningún id de modelo o de índice está en la lógica; los valores por defecto viven solo en
+`llm_client/settings.py`, `rag/config.py` y `rag_pinecone/config.py`, y coinciden con `.env.example`.
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `LLM_PROVIDER` | `openai` (`.env.example` trae `anthropic`) | Proveedor del LLM: `openai` o `anthropic`. Toda la evidencia es con Anthropic |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | vacío | Key del proveedor elegido. Sin ella, la API no arranca y lo dice |
+| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Modelo de Anthropic |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Modelo de OpenAI |
+| `MAX_CONCURRENCY` | `5` | Llamadas simultáneas del cliente de la pre-entrega 1 |
+| `PINECONE_API_KEY` | vacío | Opcional: sin ella, el investigador usa BM25 local |
+| `INDEX_NAME` | `tambor-docs` | Índice de Pinecone |
+| `PINECONE_NAMESPACE` | `plataforma` | Partición del índice con el corpus |
+| `PINECONE_CLOUD` / `PINECONE_REGION` | `aws` / `us-east-1` | Dónde se crea el índice (la región del plan gratis) |
+| `EMBEDDINGS_MODEL` | `jinaai/jina-embeddings-v2-base-es` | Modelo de embeddings local; si se cambia, hay que reingestar |
+| `REDIS_URL` | vacío (obligatoria sin Docker) | Redis 8: trabajos, cola y checkpoints. El compose la pisa con su Redis |
+| `WORKERS` | `5` | Workers que procesan la cola en paralelo |
+| `JOB_TIMEOUT_S` | `300` | Segundos máximos por ejecución; pasado eso, `FAILED` |
+| `CHECKPOINT_TTL_MIN` | `1440` | Minutos que duran los checkpoints en Redis |
+| `PHOENIX_COLLECTOR_ENDPOINT` | `http://localhost:6006` | Dónde mandar las trazas. El compose la pisa con su Phoenix |
+| `PHOENIX_PROJECT_NAME` | `tambor-api` | Proyecto de Phoenix |
+| `PHOENIX_API_KEY` | vacío | Solo para Phoenix Cloud |
+| `PHOENIX_DISABLED` | vacío | `1` o `true` para no mandar trazas |
+| `ANTHROPIC_OPEN_TELEMETRY` | `false` (lo pone la API) | Apaga los spans propios del SDK de Anthropic, que duplicaban el costo |
+
+## Tests y CI
+
+```bash
+python -m pytest -q
+```
+
+Son 247 tests, sin API keys, sin red y sin Redis real (`fakeredis`, `InMemorySaver` y modelos
+guionados). Los 27 nuevos cubren la recuperación tras un reinicio (con el trabajo en `RUNNING`, con
+el grafo ya terminado y durante la firma), la cola confiable, el esquema exhaustivo, los validadores,
+los reintentos, los logs y la concurrencia.
+
+El workflow [`.github/workflows/sistema.yml`](.github/workflows/sistema.yml) corre en cada push a
+`main`, sin secretos y sin gasto (el primer run en verde fue el
+[40039745693](https://github.com/ocampomatias/ai-engineering/actions/runs/40039745693)):
+
+- **`tests`:** `pip install -r requirements.txt` en un Ubuntu limpio y `pytest`.
+- **`compose`:** escribe un `.env` con una key falsa (`ci-sin-key`) y corre `./run.sh`. Después
+  comprueba `/health`, la consola, el OpenAPI, Phoenix (`/healthz`) y que Redis tenga los módulos
+  `search` y `ReJSON`. Manda un trabajo que recorre la cola, el worker y el checkpointer hasta
+  `FAILED` por el 401 de Anthropic, y verifica que su traza llegó a Phoenix en el proyecto
+  `tambor-api`.
+
+## Correcciones de los profesores
+
+| Corrección | Qué hice | Dónde se ve |
+|---|---|---|
+| PE7: el `docker-compose.yml` no estaba probado | Redis y Phoenix con versión fija, healthcheck, volúmenes, `run.sh`, y el job `compose` del CI que lo levanta y manda un trabajo | `docker-compose.yml`, `run.sh`, `.github/workflows/sistema.yml`, el badge |
+| PE7: un trabajo en `RUNNING` no se recuperaba | Cola confiable con `tambor:procesando`, "el checkpoint decide" y `durability="sync"` | `app/jobs.py`, `app/worker.py`, `test_reinicio_*` en `tests/test_api.py`, `evidencia/reinicio_api.json`, captura 13 |
+| PE7: faltaban capturas de costo y p95 | `probar_api.py --carga` calcula p50 y p95; capturas de Phoenix con latencia y costo por trabajo | `evidencia/salida_carga_final.txt`, captura 11 |
+| PE2: descripciones, validadores y logs | Descripción en cada campo, validadores propios, salidas de herramientas con modelo, logs `validación OK` con tiempos | `app/main.py`, `app/jobs.py`, `agente/herramientas.py`, `/docs`, `test_cada_campo_de_la_api_tiene_descripcion`, `evidencia/log_reinicio_api.log` |
+| PE5: reintentos y concurrencia | `with_retry` en los especialistas, `RetryPolicy` en `reembolso`, tests de concurrencia | `orquestador/agents/especialista.py`, `app/graph.py`, `tests/test_orquestador.py`, `test_veinte_*` |
+| PE6: que se instale y pase en limpio | `requirements.txt` con versiones fijas (`==`) y el job `tests` del CI | `requirements.txt`, job `tests` |
+
+## Rúbrica y evidencia
+
+| Criterio (peso) | Qué lo demuestra |
+|---|---|
+| Arquitectura y coherencia (30 %) | Los diagramas y el mapa de capas de esta sección; `app/graph.py` (el grafo único); `orquestador/agents/research_agent.py` (el investigador con el RAG); [`evidencia/grafo_api.mmd`](evidencia/grafo_api.mmd); la captura 12 (el RAG híbrido dentro de una traza del orquestador); `evidencia/salida_carga_final.txt` (pedidos que pasan por investigador, analista y síntesis) |
+| Robustez técnica (25 %) | `app/` todo `async`; los modelos de `app/main.py`, `app/jobs.py`, `app/hitl.py`, `agente/herramientas.py`, `orquestador/agents/analyst_agent.py` y `orquestador/state.py`; `/docs`; los tests de esquema, reintentos y concurrencia; los logs de `evidencia/log_reinicio_api.log` |
+| Persistencia y observabilidad (20 %) | `AsyncRedisSaver` en `app/main.py`; la recuperación en `app/jobs.py` y `app/worker.py`; los tests de reinicio; `evidencia/reinicio_api.json`; las capturas 11 a 14 (y 01 a 04 y 09 a 10 de la PE7); la anotación humana de la firma |
+| Documentación y despliegue (15 %) | Este README; `run.sh`; `docker-compose.yml`; `Dockerfile`; el CI en verde con el job `compose` |
+| Entorno y estándares (10 %) | Python 3.12 (`Dockerfile` con `python:3.12-slim`, `setup-python` 3.12 en el CI); `requirements.txt` fijado; `.env.example` completo; la tabla de variables; el job `tests` |
+
+## Límites conocidos
+
+- **Una sola instancia de la API.** Con dos, la que arranca devuelve a la cola los mensajes que la
+  otra está procesando: lo comprobé sin querer durante las pruebas, con dos servidores levantados
+  contra el mismo Redis. Para escalar haría falta una lista "en proceso" por instancia con un latido
+  y TTL, y que la recuperación tome solo las de instancias sin latido.
+- **Sin autenticación.** Cualquiera con acceso al puerto puede firmar un reembolso. Para el curso
+  alcanza; en producción iría detrás de un login.
+- **`create_react_agent` está deprecado** en LangGraph y desaparece en la 2.0. Lo dejé fijado con
+  `langgraph-prebuilt==1.1.0`; migrar a `create_agent` es el próximo paso.
+- **Si Redis se corta a mitad de un trabajo**, ese trabajo termina en `FAILED` en vez de
+  reintentarse. Me pasó en vivo: Windows abortó las conexiones a Redis Cloud en una de las corridas.
+- **Al reintentar `reembolso` tras una caída de Redis**, los cobros que ya se habían registrado en ese
+  mismo trabajo se informan como "ya tenía un reembolso". No se duplica plata, solo cambia el texto.
+- **El modelo es `claude-haiku-4-5`.** `claude-haiku-5-5` sería unas 10 veces más barato, pero
+  cambia el comportamiento (pensamiento encendido, otro tokenizador) y no quise arriesgarlo justo
+  antes de entregar. Se cambia con `ANTHROPIC_MODEL`, sin tocar código.
 
 # Pre-entrega 7: API de producción con Redis, Phoenix y aprobación humana
 
@@ -29,7 +353,7 @@ Las capturas del panel de Phoenix están en [`screenshots/`](screenshots/).
 graph LR
     C[cliente] -->|POST /tasks| A[FastAPI]
     A -->|MULTI: SET job + LPUSH cola| R[(Redis Cloud)]
-    W[5 workers] -->|BRPOP cola| R
+    W[5 workers] -->|BLMOVE cola a procesando| R
     W -->|ainvoke, thread_id = job_id| G[grafo LangGraph]
     G -->|checkpoints| R
     W -->|estado del job| R
@@ -131,8 +455,10 @@ espera a que se detenga, lo aprueba y espera el resultado; con `--rechazar`, lo 
 docker compose up --build
 ```
 
-No lo pude probar: no tengo Docker instalado. Todo lo de este README corrió con Redis Cloud y
-Phoenix local.
+En la entrega final quedó con versiones fijas, healthcheck y volúmenes, se arranca con `./run.sh`,
+y el CI lo levanta y le manda un trabajo en cada push: ver
+[Arranque en una instrucción](#arranque-en-una-instrucción) y [Tests y CI](#tests-y-ci). Las
+pruebas con gasto real de este README corrieron con Redis Cloud y Phoenix local.
 
 ## Endpoints
 
@@ -165,7 +491,7 @@ para siempre un trabajo en `RUNNING`.
 |---|---|---|
 | `tambor:job:{id}` | El trabajo: estado, pedido, aprobación pendiente, resultado o error (JSON) | 7 días |
 | `tambor:cola` | Lista de mensajes `{job_id}` o `{job_id, resume}` | — |
-| `tambor:job:{id}:revision` | Marca de que el trabajo ya recibió su revisión (`SET NX`) | 7 días |
+| `tambor:procesando` | Mensajes que un worker tomó y todavía no confirmó; al arrancar vuelven a la cola (entrega final) | — |
 | `tambor:reembolsos` | Hash `cobro_id → reembolso`: el efecto secundario del flujo | — |
 | `checkpoint*` | Checkpoints de LangGraph (`AsyncRedisSaver`), uno por paso, con `thread_id = job_id` | `CHECKPOINT_TTL_MIN` (1 día) |
 
@@ -189,8 +515,8 @@ el estado y el monto de cada cobro, y la síntesis lo resume. Después:
 2. El worker ve el `__interrupt__` y marca el trabajo `WAITING_APPROVAL`, con el análisis
    adentro: quien revisa decide con los datos a la vista.
 3. `POST /tasks/{id}/approve` con `{"aprobado": true, "revisor": "ana", "comentario": "..."}`
-   encola la respuesta. Un `SET NX` impide que dos aprobaciones simultáneas lo reanuden dos veces
-   (la segunda recibe `409`).
+   encola la respuesta. Una transacción `WATCH` + `MULTI` impide que dos aprobaciones simultáneas
+   lo reanuden dos veces (la segunda recibe `409`).
 4. El worker reanuda con `Command(resume=revisión)`. Si se aprobó, el nodo `reembolso` valida
    cada cobro contra la base (solo se reembolsan los aprobados) y lo registra con `HSETNX`: un
    cobro no se reembolsa dos veces.
@@ -312,8 +638,9 @@ Rechazado (`evidencia/salida_hitl_rechazo_api.txt`), terminó en `DONE` sin ejec
 para siempre. El worker esperaba en `BRPOP` hasta 5 segundos, y redis-py corta cualquier lectura a
 los 5 segundos (`socket_timeout`). Con 145 ms de ida y vuelta hasta Virginia, el cliente se rendía
 justo cuando Redis ya había sacado el mensaje de la lista. El mensaje se perdía, y el log tenía 528
-timeouts. Bajé la espera de `BRPOP` a 2 segundos y no hubo ninguno más. El arreglo de fondo sería
-`BLMOVE` a una lista de "en proceso": así, ni una caída del worker pierde mensajes.
+timeouts. Bajé la espera de `BRPOP` a 2 segundos y no hubo ninguno más. El arreglo de fondo era
+`BLMOVE` a una lista de "en proceso", y quedó hecho en la entrega final: ahora ni una caída del
+worker pierde mensajes.
 
 **Lo que volvía de Redis no era lo que se había guardado.** Al reanudar después de la aprobación,
 el worker fallaba: `Aporte` y `Decision` llegaban como `{"lc": 2, "type": "constructor", ...}` en
@@ -336,8 +663,10 @@ trabajo que espera aprobación más de un día ya no se puede reanudar.
 de 5 tardó 1 s porque además abre conexiones nuevas. Junté el `SET` y el `LPUSH` en una sola
 transacción, que es un solo viaje y además atómica. Con Redis en la misma red, serían milisegundos.
 
-**Lo que no resolví.** Si la API se apaga con un trabajo en `RUNNING`, ese trabajo queda así: nada
-lo retoma al arrancar. Con `BLMOVE` y una lista de "en proceso" se podrían reencolar al reiniciar.
+**Lo que quedaba pendiente, ya resuelto.** En esta pre-entrega, si la API se apagaba con un trabajo
+en `RUNNING`, ese trabajo quedaba así: nada lo retomaba al arrancar. En la entrega final lo resolví
+con la cola confiable y "el checkpoint decide", y lo probé matando la API a mitad de un trabajo:
+ver [Persistencia y recuperación tras un reinicio](#persistencia-y-recuperación-tras-un-reinicio).
 
 ## Tests
 
@@ -345,7 +674,7 @@ lo retoma al arrancar. Con `BLMOVE` y una lista de "en proceso" se podrían reen
 python -m pytest -q tests/test_api.py
 ```
 
-Son 12 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
+Son 23 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
 `InMemorySaver`, y los modelos son los guionados de la pre-entrega 6. La API se prueba por HTTP
 con los workers corriendo. Cubren:
 
@@ -358,9 +687,12 @@ con los workers corriendo. Cubren:
 - el serializador de Redis: el estado vuelve con sus tipos;
 - la anotación en Phoenix: la firma queda anotada sobre el span correcto con su etiqueta, y con
   Phoenix caído el reembolso se completa igual.
-- un corte de Redis: `/health` y `/tasks/{id}` responden `503` con mensaje, no `500`.
+- un corte de Redis: `/health` y `/tasks/{id}` responden `503` con mensaje, no `500`;
+- lo de la entrega final: la cola confiable, los tres reinicios (con el trabajo en `RUNNING`, con
+  el grafo ya terminado y durante la firma), el esquema exhaustivo del OpenAPI, los validadores, los
+  logs con tiempos y 20 pedidos simultáneos con 5 workers.
 
-Con los de las pre-entregas anteriores son 220:
+Con los de las pre-entregas anteriores son 247:
 
 ```bash
 python -m pytest -q
@@ -372,25 +704,30 @@ python -m pytest -q
 app/
   main.py                   FastAPI: POST /tasks, GET /tasks/{id}, /health, la consola en /; levanta los workers
   graph.py                  el orquestador del M6 + aprobación + reembolso; serializador de Redis
-  worker.py                 toma trabajos de la cola, corre el grafo, PENDING/RUNNING/DONE/FAILED
-  jobs.py                   estado de los trabajos y cola en Redis
+  worker.py                 toma trabajos de la cola, el checkpoint decide por dónde seguir, PENDING/RUNNING/DONE/FAILED
+  jobs.py                   estado de los trabajos, cola confiable (procesando, confirmar, recuperar) en Redis
   hitl.py                   qué es crítico, nodo con interrupt(), reembolso y POST /approve
   observability.py          Phoenix + OpenInference
   static/                   la consola web: index.html, consola.css, consola.js
-probar_api.py               5 pedidos concurrentes y el flujo de aprobación
-docker-compose.yml          API + Redis 8 + Phoenix (sin probar)
+probar_api.py               5 pedidos concurrentes con p50/p95, el flujo de aprobación y --reinicio
+run.sh                      arranque en una instrucción (entrega final)
+docker-compose.yml          API + Redis 8 + Phoenix, probado en el CI
 Dockerfile
-screenshots/                capturas de Phoenix (01-04, 09-10) y de la consola (05-08)
+.github/workflows/sistema.yml  CI: tests en limpio y arranque con Docker Compose
+screenshots/                capturas de Phoenix (01-04, 09-14) y de la consola (05-08)
 evidencia/
-  salida_carga_api.txt      la prueba de carga
-  carga_api.json            lo mismo, con las respuestas
+  salida_carga_api.txt      la prueba de carga de la pre-entrega 7
+  salida_carga_final.txt    la prueba de carga de la entrega final, con p50 y p95
+  carga_api.json            la de la entrega final, con las respuestas
+  reinicio_api.json         el trabajo que sobrevivió a un kill() de la API
+  log_reinicio_api.log      el log de los dos servidores de esa prueba
   salida_hitl_api.txt       aprobación
   salida_hitl_rechazo_api.txt
   hitl_api_aprobado.json    el trabajo en espera y el final
   hitl_api_rechazado.json
-  log_api.log               el log de la API durante las pruebas
-  grafo_api.mmd             el diagrama del grafo
-tests/test_api.py           12 tests sin API keys
+  log_api.log               el log de la API durante las pruebas de la pre-entrega 7
+  grafo_api.mmd             el diagrama del grafo, generado desde el código
+tests/test_api.py           23 tests sin API keys
 ```
 
 # Pre-entrega 6: orquestador multi-agente con supervisor
@@ -1804,26 +2141,8 @@ copy .env.example .env
 
 En PowerShell, `Copy-Item .env.example .env`. En Linux o macOS, `cp .env.example .env`.
 
-| Variable | Default | Para qué |
-|---|---|---|
-| `LLM_PROVIDER` | `openai` | Qué proveedor usar: `openai` o `anthropic` |
-| `OPENAI_API_KEY` | vacío | Key de OpenAI, si vas a usar OpenAI |
-| `ANTHROPIC_API_KEY` | vacío | Key de Anthropic, si vas a usar Anthropic |
-| `OPENAI_MODEL` | `gpt-4o-mini` | ID del modelo de OpenAI |
-| `ANTHROPIC_MODEL` | `claude-haiku-4-5` | ID del modelo de Anthropic |
-| `MAX_CONCURRENCY` | `5` | Cuántas llamadas pueden viajar a la vez |
-| `PINECONE_API_KEY` | vacío | Key de Pinecone (pre-entrega 4) |
-| `INDEX_NAME` | `tambor-docs` | Índice serverless de Pinecone; si no existe, se crea |
-| `PINECONE_NAMESPACE` | `plataforma` | Partición del índice donde va el corpus |
-| `PINECONE_CLOUD` / `PINECONE_REGION` | `aws` / `us-east-1` | Dónde se crea el índice (la región del plan gratuito) |
-| `REDIS_URL` | vacío | Redis 8 para la API: estado de los trabajos, cola y checkpoints (pre-entrega 7) |
-| `WORKERS` | `5` | Workers que procesan la cola en paralelo |
-| `JOB_TIMEOUT_S` | `300` | Segundos máximos por ejecución del grafo; pasado eso, `FAILED` |
-| `CHECKPOINT_TTL_MIN` | `1440` | Minutos que duran los checkpoints en Redis |
-| `PHOENIX_COLLECTOR_ENDPOINT` | `http://localhost:6006` | Dónde mandar las trazas |
-| `PHOENIX_PROJECT_NAME` | `tambor-api` | Proyecto de Phoenix |
-| `PHOENIX_API_KEY` | vacío | Solo para Phoenix Cloud |
-| `PHOENIX_DISABLED` | vacío | `1` para no mandar trazas |
+La tabla con cada variable, su valor por defecto y para qué sirve está en
+[Variables de entorno del sistema](#variables-de-entorno-del-sistema), en la sección de la entrega final.
 
 Los dos modelos por defecto son los más baratos de cada proveedor, que para probar el cliente
 alcanzan de sobra. Si necesitás más capacidad, cambiá `ANTHROPIC_MODEL` o `OPENAI_MODEL` en el

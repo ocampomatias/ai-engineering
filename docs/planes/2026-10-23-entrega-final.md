@@ -300,10 +300,10 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase F: documentación (rúbrica: arquitectura 30 % y documentación 15 %; consigna 1 y 6)
 
-20. [ ] **Regenerar el diagrama del grafo desde el código** (`construir_grafo(...).get_graph().draw_mermaid()` con un checkpointer en memoria y modelos guionados, sin keys) en `evidencia/grafo_api.mmd`, para que el README no muestre un diagrama que el código ya no tiene.
+20. [x] *(Hecho: regenerado con `InMemorySaver`, `SupervisorGuionado` y nodos falsos para los especialistas, en un one-off sin script nuevo. `git diff` vacío: la topología del código es la misma que la de la PE7; el `RetryPolicy` de `reembolso` no se dibuja en el Mermaid.)* **Regenerar el diagrama del grafo desde el código** (`construir_grafo(...).get_graph().draw_mermaid()` con un checkpointer en memoria y modelos guionados, sin keys) en `evidencia/grafo_api.mmd`, para que el README no muestre un diagrama que el código ya no tiene.
     — verificación: `git diff evidencia/grafo_api.mmd` vacío o con cambios explicables.
 
-21. [ ] **README, sección "Entrega final: The Intelligence System" arriba de todo** (unas 150–250 líneas; el detalle sigue en las secciones de cada pre-entrega). Contenido:
+21. [x] *(Hecho: sección de ~320 líneas, más que las 150–250 previstas por los dos diagramas Mermaid y las 5 tablas pedidas; la prosa queda en ~200. Los dos Mermaid se renderizaron con `mermaid-cli` 11 sin errores. 53 enlaces relativos y anclas verificados, ninguno roto. La tabla de variables de la PE1 se reemplazó por un enlace a la nueva, para no tener dos. En la PE7 también se corrigió `BRPOP` → `BLMOVE` en el diagrama y `SET NX` → `WATCH` + `MULTI` en la firma.)* **README, sección "Entrega final: The Intelligence System" arriba de todo** (unas 150–250 líneas; el detalle sigue en las secciones de cada pre-entrega). Contenido:
     - qué tarea compleja resuelve, con un ejemplo de pedido que usa RAG, varios pasos y firma;
     - **arranque en una instrucción** (`./run.sh`, o `docker compose up --build` con `.env`) y el camino sin Docker en 3 comandos;
     - **diagrama de flujo del grafo de agentes** en Mermaid, con las herramientas y el RAG híbrido colgando del investigador;
