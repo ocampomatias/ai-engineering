@@ -195,13 +195,16 @@ def apagar(proceso: subprocess.Popen[bytes], log: Any) -> None:  # noqa: ANN401
 
 async def reinicio() -> int:
     url = f"http://127.0.0.1:{PUERTO_REINICIO}"
-    async with httpx.AsyncClient(base_url=url, timeout=5) as http:
-        try:
-            await http.get("/health")
-            print(f"Ya hay algo escuchando en {url}: cerralo antes de la prueba.")
-            return 1
-        except httpx.TransportError:
-            pass  # el puerto está libre
+    # Otra API contra el mismo Redis (la de --url, por defecto) le robaría los mensajes a la prueba.
+    ocupados = ((url, "el puerto de la prueba"), ("http://localhost:8000", "otra API, quizá contra el mismo Redis"))
+    for otra, motivo in ocupados:
+        async with httpx.AsyncClient(base_url=otra, timeout=5) as http:
+            try:
+                await http.get("/health")
+                print(f"Ya hay algo escuchando en {otra} ({motivo}): cerralo antes de la prueba.")
+                return 1
+            except httpx.TransportError:
+                pass  # libre
 
     inicio = time.perf_counter()
     linea: list[dict[str, Any]] = []

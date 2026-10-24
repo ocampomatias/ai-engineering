@@ -17,7 +17,6 @@ Los nodos del supervisor, los especialistas y la síntesis son los mismos de
 
 from typing import Any
 
-import redis.exceptions
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.redis.jsonplus_redis import JsonPlusRedisSerializer
@@ -39,6 +38,7 @@ from .hitl import (
     requiere_aprobacion,
     rutear_revision,
 )
+from .jobs import REDIS_TRANSITORIO
 
 
 #: Los modelos de Pydantic que viajan en el estado, como los identifica el serializador
@@ -56,10 +56,6 @@ def serializador_redis() -> JsonPlusRedisSerializer:
     al reanudar después de la aprobación, `Aporte` y `Decision` llegaban como dicts.
     """
     return JsonPlusRedisSerializer(allowed_json_modules=TIPOS_DEL_ESTADO)
-
-
-#: Caídas momentáneas de Redis: lo único ante lo que se reintenta el nodo `reembolso`.
-REDIS_TRANSITORIO = (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)
 
 
 class EstadoProduccion(EstadoOrquestador):

@@ -12,7 +12,9 @@ estado viven en Redis, pasar a un proceso aparte (o a Arq/Celery) no cambia
 nada de lo de abajo.
 
 Si el grafo falla, el trabajo pasa a FAILED con el error. Sin eso, el cliente
-quedaría consultando para siempre un trabajo en RUNNING.
+quedaría consultando para siempre un trabajo en RUNNING. Una caída momentánea de
+Redis no es una falla del trabajo: el mensaje vuelve a la cola y se retoma desde el
+checkpoint (seguro porque el checkpoint decide y el reembolso es idempotente).
 """
 
 import asyncio
@@ -30,7 +32,7 @@ from opentelemetry.trace import Status, StatusCode
 from orquestador import RECURSION_LIMIT
 
 from .hitl import detectar_accion
-from .jobs import EstadoJob, Job, JobStore
+from .jobs import REDIS_TRANSITORIO, EstadoJob, Job, JobStore
 from .observability import anotar_firma, tracer
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,16 @@ logger = logging.getLogger(__name__)
 TIMEOUT_JOB_S = float(os.getenv("JOB_TIMEOUT_S", "300"))
 #: RECURSION_LIMIT de la pre-entrega 6 más los dos nodos de aprobación y reembolso.
 LIMITE_PASOS = RECURSION_LIMIT + 2
+#: Espera antes de reintentar cuando Redis no responde.
+ESPERA_REINTENTO_S = 2.0
+#: Veces que un trabajo vuelve a la cola por un corte de Redis; con el corte siguiente, FAILED.
+#: Sin tope, una escritura del checkpoint que falla siempre pagaría el nodo del LLM sin fin.
+MAX_REINTENTOS_REDIS = 3
+#: La firma llegó y el checkpoint ya no está (vence a CHECKPOINT_TTL_MIN; el trabajo dura 7 días).
+ERROR_CHECKPOINT_VENCIDO = (
+    "la aprobación llegó después de que venció el checkpoint (CHECKPOINT_TTL_MIN); "
+    "hay que volver a mandar el pedido"
+)
 
 
 def _resultado(final: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +73,7 @@ async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]
     - interrupción pendiente sin `resume`: vuelve a esperar la firma, sin llamar al LLM;
     - quedó a mitad de camino (`next`): retoma desde el último paso guardado;
     - terminó pero el estado del trabajo no se guardó: DONE con esos valores, sin LLM;
+    - sin checkpoint y con `resume`: el checkpoint venció antes de la firma; FAILED, sin LLM;
     - sin checkpoint: arranca de cero con el pedido.
     """
     config = {"configurable": {"thread_id": job.id}, "recursion_limit": LIMITE_PASOS}
@@ -85,6 +98,9 @@ async def _ejecutar(grafo: CompiledStateGraph, job: Job, mensaje: dict[str, Any]
     elif snap.values:
         logger.info("[worker] %s ya había terminado en el checkpoint: se guarda sin volver a correr", job.id)
         return await _terminado(job, resume, _resultado(snap.values))
+    elif resume is not None:
+        logger.warning("[worker] %s: %s", job.id, ERROR_CHECKPOINT_VENCIDO)
+        return {"estado": EstadoJob.FAILED, "error": ERROR_CHECKPOINT_VENCIDO, "aprobacion": None}
     else:
         nombre, entrada, entrada_span = "pedido", {"messages": [HumanMessage(job.pedido)]}, job.pedido
 
@@ -128,6 +144,16 @@ async def procesar(store: JobStore, grafo: CompiledStateGraph, mensaje: dict[str
     await store.actualizar(job_id, estado=EstadoJob.RUNNING)
     try:
         campos = await _ejecutar(grafo, job, mensaje)
+    except REDIS_TRANSITORIO as exc:
+        intentos = mensaje.get("intentos", 0)
+        if intentos < MAX_REINTENTOS_REDIS:
+            raise  # no es una falla del trabajo: correr_worker devuelve el mensaje a la cola
+        logger.exception("[worker] %s: Redis se cortó %s veces, se abandona", job_id, intentos + 1)
+        error = (
+            f"Redis se cortó {intentos + 1} veces durante el trabajo; se puede volver a mandar el pedido "
+            f"(último error: {type(exc).__name__}: {exc})"
+        )
+        campos = {"estado": EstadoJob.FAILED, "error": error}
     except Exception as exc:  # cualquier falla, del grafo o después, termina en FAILED y nunca en RUNNING
         logger.exception("[worker] %s falló", job_id)
         error = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
@@ -141,6 +167,7 @@ async def correr_worker(store: JobStore, grafo: CompiledStateGraph, nombre: str)
     """Loop infinito de un worker. Se cancela al apagar la API."""
     logger.info("[%s] escuchando la cola", nombre)
     while True:
+        crudo = None
         try:
             item = await store.desencolar()
             if item is not None:
@@ -151,6 +178,25 @@ async def correr_worker(store: JobStore, grafo: CompiledStateGraph, nombre: str)
                 await store.confirmar(crudo)
         except asyncio.CancelledError:
             raise
-        except Exception:  # Redis caído un momento: no matar al worker
-            logger.exception("[%s] error leyendo la cola; reintento en 2 s", nombre)
-            await asyncio.sleep(2)
+        except Exception as exc:  # nunca matar al worker
+            # Pasado el tope no se devuelve: si ni el FAILED se pudo guardar, lo recupera el próximo arranque.
+            devolver = (
+                crudo is not None
+                and isinstance(exc, REDIS_TRANSITORIO)
+                and mensaje.get("intentos", 0) < MAX_REINTENTOS_REDIS
+            )
+            if crudo is None:
+                logger.exception("[%s] error leyendo la cola; reintento en %g s", nombre, ESPERA_REINTENTO_S)
+            elif devolver:
+                logger.warning(
+                    "[%s] Redis no respondió a mitad de un trabajo; vuelve a la cola en %g s",
+                    nombre, ESPERA_REINTENTO_S, exc_info=True,
+                )
+            else:
+                logger.exception("[%s] error con un trabajo; queda en proceso hasta el próximo arranque", nombre)
+            await asyncio.sleep(ESPERA_REINTENTO_S)
+            if devolver:
+                try:
+                    await store.devolver(crudo)
+                except Exception:  # sigue en "en proceso": lo devuelve `recuperar` al próximo arranque
+                    logger.exception("[%s] no se pudo devolver el mensaje a la cola", nombre)

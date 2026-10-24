@@ -170,9 +170,20 @@ siempre. Lo resolví con dos piezas chicas:
 | Interrupción pendiente y el mensaje no trae `resume` | Vuelve a `WAITING_APPROVAL` sin llamar al LLM | ninguno |
 | Tiene `next` (quedó a mitad de camino) | `ainvoke(None, config)`: retoma desde el último paso guardado | `reanudacion`, etiqueta `recuperado` |
 | Sin `next` y con valores (terminó pero no se guardó) | Marca `DONE` con esos valores, sin llamar al LLM | ninguno |
+| No hay checkpoint y el mensaje trae `resume` (venció `CHECKPOINT_TTL_MIN` antes de la firma) | `FAILED` con un error que pide volver a mandar el pedido, sin llamar al LLM ni reembolsar | ninguno |
 
 El grafo corre con `durability="sync"`: cada paso queda guardado antes de seguir, y al retomar no se
 paga dos veces un nodo que ya terminó. Un mensaje de un trabajo `DONE` o `FAILED` se descarta.
+
+Un corte momentáneo de Redis (`ConnectionError` o `TimeoutError`, dentro del grafo o al guardar el
+estado) no es una falla del trabajo: el worker espera 2 s y devuelve el mensaje a la punta de salida
+de la cola en una transacción (`JobStore.devolver`), y la tabla de arriba decide por dónde seguir. El
+mensaje lleva la cuenta (`intentos`): vuelve a la cola hasta `MAX_REINTENTOS_REDIS` (3) veces, y con
+el corte siguiente el trabajo termina en `FAILED` ("Redis se cortó 4 veces durante el trabajo; …").
+Sin ese tope, un checkpoint que nunca se puede escribir pagaría el mismo nodo del LLM sin fin. Es
+seguro porque el checkpoint no repite lo que ya terminó y el reembolso es idempotente: si `HSETNX`
+encuentra el cobro registrado por el mismo trabajo, lo informa como registrado; si lo registró otro,
+"ya tenía un reembolso registrado, no se duplica".
 
 **La prueba real** (`python probar_api.py --reinicio`, en
 [`evidencia/reinicio_api.json`](evidencia/reinicio_api.json) y
@@ -282,10 +293,11 @@ Ningún id de modelo o de índice está en la lógica; los valores por defecto v
 python -m pytest -q
 ```
 
-Son 247 tests, sin API keys, sin red y sin Redis real (`fakeredis`, `InMemorySaver` y modelos
-guionados). Los 27 nuevos cubren la recuperación tras un reinicio (con el trabajo en `RUNNING`, con
-el grafo ya terminado y durante la firma), la cola confiable, el esquema exhaustivo, los validadores,
-los reintentos, los logs y la concurrencia.
+Son 252 tests, sin API keys, sin red y sin Redis real (`fakeredis`, `InMemorySaver` y modelos
+guionados). Los 32 nuevos cubren la recuperación tras un reinicio (con el trabajo en `RUNNING`, con
+el grafo ya terminado y durante la firma), los cortes de Redis a mitad de un trabajo, la firma con el
+checkpoint vencido, la cola confiable, el esquema exhaustivo, los validadores, los reintentos, los
+logs y la concurrencia.
 
 El workflow [`.github/workflows/sistema.yml`](.github/workflows/sistema.yml) corre en cada push a
 `main`, sin secretos y sin gasto (el primer run en verde fue el
@@ -329,10 +341,10 @@ El workflow [`.github/workflows/sistema.yml`](.github/workflows/sistema.yml) cor
   alcanza; en producción iría detrás de un login.
 - **`create_react_agent` está deprecado** en LangGraph y desaparece en la 2.0. Lo dejé fijado con
   `langgraph-prebuilt==1.1.0`; migrar a `create_agent` es el próximo paso.
-- **Si Redis se corta a mitad de un trabajo**, ese trabajo termina en `FAILED` en vez de
-  reintentarse. Me pasó en vivo: Windows abortó las conexiones a Redis Cloud en una de las corridas.
-- **Al reintentar `reembolso` tras una caída de Redis**, los cobros que ya se habían registrado en ese
-  mismo trabajo se informan como "ya tenía un reembolso". No se duplica plata, solo cambia el texto.
+- **Si Redis no deja ni devolver el mensaje ni guardar el `FAILED`**, el trabajo queda en `RUNNING`
+  con el mensaje en `tambor:procesando` hasta el próximo arranque, que lo recupera.
+- **Una firma que llega después de `CHECKPOINT_TTL_MIN`** (un día) termina en `FAILED`: el trabajo
+  dura 7 días pero su checkpoint no, y hay que volver a mandar el pedido.
 - **El modelo es `claude-haiku-4-5`.** `claude-haiku-5-5` sería unas 10 veces más barato, pero
   cambia el comportamiento (pensamiento encendido, otro tokenizador) y no quise arriesgarlo justo
   antes de entregar. Se cambia con `ANTHROPIC_MODEL`, sin tocar código.
@@ -483,7 +495,9 @@ PENDING -> RUNNING -> DONE
 
 Cualquier excepción en el worker, sea del grafo o de lo que viene después, deja el trabajo en
 `FAILED` con el error. Es lo que la consigna marca como error común: sin eso, el cliente consulta
-para siempre un trabajo en `RUNNING`.
+para siempre un trabajo en `RUNNING`. La excepción es un corte momentáneo de Redis: desde la entrega
+final el mensaje vuelve a la cola y se reintenta (ver
+[Persistencia y recuperación tras un reinicio](#persistencia-y-recuperación-tras-un-reinicio)).
 
 ## Persistencia en Redis
 
@@ -656,7 +670,8 @@ termina en `FAILED`, y hay un test para eso.
 **Los checkpoints llenaban el plan gratis.** Cada trabajo deja unos 0,7 MB en Redis: un
 checkpoint por paso, con todo el historial de mensajes. Sin vencimiento, los 30 MB se llenaban en
 unas decenas de pedidos. Les puse TTL de un día (`CHECKPOINT_TTL_MIN`). El costo de esa decisión: un
-trabajo que espera aprobación más de un día ya no se puede reanudar.
+trabajo que espera aprobación más de un día ya no se puede reanudar (desde la entrega final, la firma
+tardía termina en `FAILED` con un error que lo explica, en vez de correr el pedido de cero).
 
 **El POST tarda por la distancia, no por el grafo.** Un `POST /tasks` suelto tarda entre 0,36 y
 0,5 s, y casi todo es la ida y vuelta a Redis Cloud (145 ms por viaje) desde Argentina. En la ráfaga
@@ -674,7 +689,7 @@ ver [Persistencia y recuperación tras un reinicio](#persistencia-y-recuperació
 python -m pytest -q tests/test_api.py
 ```
 
-Son 23 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
+Son 28 tests sin API keys, sin red y sin Redis real: Redis es `fakeredis`, el checkpointer
 `InMemorySaver`, y los modelos son los guionados de la pre-entrega 6. La API se prueba por HTTP
 con los workers corriendo. Cubren:
 
@@ -689,10 +704,13 @@ con los workers corriendo. Cubren:
   Phoenix caído el reembolso se completa igual.
 - un corte de Redis: `/health` y `/tasks/{id}` responden `503` con mensaje, no `500`;
 - lo de la entrega final: la cola confiable, los tres reinicios (con el trabajo en `RUNNING`, con
-  el grafo ya terminado y durante la firma), el esquema exhaustivo del OpenAPI, los validadores, los
+  el grafo ya terminado y durante la firma), los cortes de Redis dentro del grafo y al guardar el
+  estado (se reintenta y termina `DONE`; un corte que no se va termina `FAILED` tras 3 reintentos),
+  la firma con el checkpoint vencido, el reembolso que registró el mismo trabajo antes de una caída,
+  el esquema exhaustivo del OpenAPI, los validadores, los
   logs con tiempos y 20 pedidos simultáneos con 5 workers.
 
-Con los de las pre-entregas anteriores son 247:
+Con los de las pre-entregas anteriores son 252:
 
 ```bash
 python -m pytest -q
@@ -727,7 +745,7 @@ evidencia/
   hitl_api_rechazado.json
   log_api.log               el log de la API durante las pruebas de la pre-entrega 7
   grafo_api.mmd             el diagrama del grafo, generado desde el código
-tests/test_api.py           23 tests sin API keys
+tests/test_api.py           28 tests sin API keys
 ```
 
 # Pre-entrega 6: orquestador multi-agente con supervisor

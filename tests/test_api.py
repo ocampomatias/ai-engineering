@@ -37,6 +37,7 @@ from app.graph import construir_grafo, serializador_redis
 from app.hitl import Accion, Revision, detectar_accion
 from app.jobs import COLA, PROCESANDO, REEMBOLSOS, EstadoJob, Job, JobStore
 from app.main import Recursos, crear_app
+from app.worker import MAX_REINTENTOS_REDIS
 from orquestador import Aporte
 
 APROBADO = "cob_7E8Q4"  # aprobado, 8.700,00 ARS (agente/datos_cobros.json)
@@ -396,7 +397,88 @@ async def test_reinicio_durante_la_firma_no_reembolsa_dos_veces(
         job = await esperar(http, job_id, "DONE", "FAILED")
     assert job["estado"] == "DONE"
     assert list(await redis.hkeys(REEMBOLSOS)) == [APROBADO]  # una sola vez
-    assert f"{APROBADO}: ya tenía un reembolso registrado" in job["resultado"]["resultado_accion"]
+    # Lo registró este mismo trabajo antes de la caída: se informa como registrado.
+    assert f"{APROBADO}: reembolso de 8.700,00 ARS registrado" in job["resultado"]["resultado_accion"]
+
+
+async def test_el_reembolso_de_otro_trabajo_no_se_duplica(redis: FakeAsyncRedis) -> None:
+    store = JobStore(redis)
+    assert await store.registrar_reembolso(APROBADO, {"job_id": "a", "revisor": "ana"})
+    assert await store.registrar_reembolso(APROBADO, {"job_id": "a", "revisor": "ana"})  # reintento del mismo
+    assert not await store.registrar_reembolso(APROBADO, {"job_id": "b", "revisor": "ana"})
+    await redis.hset(REEMBOLSOS, RECHAZADO, json.dumps({"monto": "1"}))  # un registro sin job_id
+    assert not await store.registrar_reembolso(RECHAZADO, {"job_id": "a"})
+    assert json.loads(await redis.hget(REEMBOLSOS, APROBADO))["job_id"] == "a"
+
+
+async def test_la_firma_con_el_checkpoint_vencido_falla_sin_llamar_al_modelo(redis: FakeAsyncRedis) -> None:
+    modelo = guion()
+    async with cliente(redis, modelo=modelo) as http:
+        job_id = (await http.post("/tasks", json={"pedido": f"Reembolsá {APROBADO}"})).json()["id"]
+        await esperar(http, job_id, "WAITING_APPROVAL")
+    llamadas = len(modelo.vistos)
+
+    async with cliente(redis, modelo=modelo) as http:  # otro checkpointer, vacío: el de antes venció
+        await http.post(f"/tasks/{job_id}/approve", json={"aprobado": True, "revisor": "ana"})
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert job["estado"] == "FAILED"
+    assert "venció el checkpoint (CHECKPOINT_TTL_MIN)" in job["error"]
+    assert job["aprobacion"] is None
+    assert len(modelo.vistos) == llamadas
+    assert await redis.hlen(REEMBOLSOS) == 0
+
+
+# --- Caídas momentáneas de Redis: se reintenta, no FAILED ----------------------
+
+
+@pytest.fixture
+def espera_corta(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.worker.ESPERA_REINTENTO_S", 0.01)
+
+
+async def test_un_corte_de_redis_al_guardar_el_estado_se_reintenta(
+    redis: FakeAsyncRedis, monkeypatch: pytest.MonkeyPatch, espera_corta: None
+) -> None:
+    actualizar = JobStore.actualizar
+    cortes = []
+
+    async def actualizar_con_corte(self: JobStore, job_id: str, **campos: Any) -> Job:  # noqa: ANN401
+        if campos.get("estado") == EstadoJob.DONE and not cortes:
+            cortes.append(job_id)
+            raise RedisConnectionError("se cortó Redis al guardar DONE")
+        return await actualizar(self, job_id, **campos)
+
+    monkeypatch.setattr(JobStore, "actualizar", actualizar_con_corte)
+    modelo = guion()
+    async with cliente(redis, modelo=modelo) as http:  # al cerrar, revisa cola y "en proceso" vacías
+        job_id = (await http.post("/tasks", json={"pedido": PEDIDO})).json()["id"]
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert cortes == [job_id]
+    assert job["estado"] == "DONE" and job["error"] is None
+    assert len(modelo.vistos) == 3  # al retomar, el checkpoint ya estaba terminado: sin llamadas nuevas
+
+
+async def test_un_corte_de_redis_dentro_del_grafo_se_reintenta_desde_el_checkpoint(
+    redis: FakeAsyncRedis, caplog: pytest.LogCaptureFixture, espera_corta: None
+) -> None:
+    caplog.set_level(logging.INFO)
+    intentos = []
+
+    async def investigador_con_corte(estado: dict[str, Any]) -> dict[str, Any]:
+        intentos.append(1)
+        if len(intentos) == 1:
+            raise RedisConnectionError("se cortó Redis en el checkpointer")
+        return await especialista_falso("investigador")(estado)
+
+    modelo = guion()
+    async with cliente(redis, modelo=modelo, investigador=investigador_con_corte) as http:
+        job_id = (await http.post("/tasks", json={"pedido": PEDIDO})).json()["id"]
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert job["estado"] == "DONE" and job["error"] is None
+    assert len(intentos) == 2
+    assert len(modelo.vistos) == 3  # la decisión del supervisor de antes del corte no se repite
+    assert "Redis no respondió a mitad de un trabajo; vuelve a la cola" in caplog.text
+    assert f"[worker] {job_id} reanuda desde el checkpoint (siguiente: investigador)" in caplog.text
 
 
 class PhoenixFalso:
@@ -584,3 +666,23 @@ async def test_veinte_pedidos_simultaneos_con_cinco_workers(redis: FakeAsyncRedi
         # Cada trabajo tiene su propio aporte: los thread_id no se mezclan.
         assert [(a["agente"], a["instruccion"]) for a in job["resultado"]["aportes"]] == [("investigador", pedido)]
         assert [d["siguiente"] for d in job["resultado"]["decisiones"]] == ["investigador", "sintesis"]
+
+
+async def test_un_corte_de_redis_persistente_termina_en_failed_tras_el_tope(
+    redis: FakeAsyncRedis, espera_corta: None
+) -> None:
+    intentos = []
+
+    async def investigador_siempre_cortado(estado: dict[str, Any]) -> dict[str, Any]:
+        intentos.append(1)
+        raise RedisConnectionError("Redis no vuelve")
+
+    modelo = guion()
+    async with cliente(redis, modelo=modelo, investigador=investigador_siempre_cortado) as http:
+        job_id = (await http.post("/tasks", json={"pedido": PEDIDO})).json()["id"]
+        job = await esperar(http, job_id, "DONE", "FAILED")
+    assert job["estado"] == "FAILED"
+    assert job["error"].startswith(f"Redis se cortó {MAX_REINTENTOS_REDIS + 1} veces durante el trabajo")
+    assert "ConnectionError: Redis no vuelve" in job["error"]
+    assert len(intentos) == MAX_REINTENTOS_REDIS + 1  # el primero y los 3 reintentos
+    assert len(modelo.vistos) == 1  # solo la primera decisión del supervisor; los reintentos no pagan LLM

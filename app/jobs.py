@@ -19,6 +19,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 from redis.asyncio import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
 from redis.exceptions import WatchError
 
 from orquestador.state import Aporte, Decision
@@ -28,6 +30,10 @@ COLA = f"{PREFIJO}:cola"
 PROCESANDO = f"{PREFIJO}:procesando"
 REEMBOLSOS = f"{PREFIJO}:reembolsos"
 TTL_JOB_S = 7 * 24 * 3600
+
+#: Caídas momentáneas de Redis. El nodo `reembolso` se reintenta ante ellas, y el worker
+#: devuelve el mensaje a la cola en vez de marcar FAILED.
+REDIS_TRANSITORIO = (RedisConnectionError, RedisTimeoutError)
 
 
 class EstadoJob(StrEnum):
@@ -204,6 +210,21 @@ class JobStore:
         """El trabajo terminó y su estado quedó guardado: el mensaje sale de "en proceso"."""
         await self.redis.lrem(PROCESANDO, 1, crudo)
 
+    async def devolver(self, crudo: str) -> None:
+        """Redis se cortó a mitad del trabajo: el mensaje vuelve de "en proceso" a la cola con
+        `intentos` + 1 (el nuevo reemplaza al viejo en la misma transacción).
+
+        RPUSH lo deja en la punta de la que saca BLMOVE: se retoma antes que los pedidos nuevos.
+        Si el LREM no encuentra nada (el `confirmar` llegó a Redis pero no su respuesta), el
+        mensaje queda repetido y el worker lo descarta porque el trabajo ya está resuelto.
+        """
+        mensaje = json.loads(crudo)
+        nuevo = json.dumps({**mensaje, "intentos": mensaje.get("intentos", 0) + 1})
+        async with self.redis.pipeline(transaction=True) as tx:
+            tx.lrem(PROCESANDO, 1, crudo)
+            tx.rpush(COLA, nuevo)
+            await tx.execute()
+
     async def recuperar(self) -> int:
         """Devuelve a la cola lo que quedó en "en proceso" (caída o reinicio). Llamar antes de los workers.
 
@@ -218,5 +239,12 @@ class JobStore:
         return movidos
 
     async def registrar_reembolso(self, cobro_id: str, datos: dict[str, Any]) -> bool:
-        """El efecto secundario del flujo. HSETNX: un cobro no se reembolsa dos veces."""
-        return bool(await self.redis.hsetnx(REEMBOLSOS, cobro_id, json.dumps(datos, ensure_ascii=False)))
+        """El efecto secundario del flujo. HSETNX: un cobro no se reembolsa dos veces.
+
+        True si el reembolso es de este trabajo (`datos["job_id"]`): recién registrado, o
+        registrado por el mismo trabajo antes de una caída. False si lo registró otro.
+        """
+        if await self.redis.hsetnx(REEMBOLSOS, cobro_id, json.dumps(datos, ensure_ascii=False)):
+            return True
+        previo = await self.redis.hget(REEMBOLSOS, cobro_id)
+        return bool(previo) and json.loads(previo).get("job_id") == datos["job_id"]

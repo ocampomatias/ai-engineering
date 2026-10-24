@@ -1,5 +1,5 @@
 # Entrega final del curso AI Engineering: "The Intelligence System"
-23-oct-2026 · Proyecto: `C:\Users\ocamp\OneDrive\Desktop\CLAUDE CODE\AI ENGINEERING` (repo público https://github.com/ocampomatias/ai-engineering, rama `main`, base `d8df84f`) · Vence: 7-nov-2026 · Estado: aprobado
+23-oct-2026 · Proyecto: `C:\Users\ocamp\OneDrive\Desktop\CLAUDE CODE\AI ENGINEERING` (repo público https://github.com/ocampomatias/ai-engineering, rama `main`, base `d8df84f`) · Vence: 7-nov-2026 · Estado: en auditoría
 
 Todas las rutas de este plan son relativas a esa carpeta.
 
@@ -321,7 +321,7 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
     En la PE7: reemplazar "No lo pude probar" del compose y "Lo que no resolví" por lo hecho; actualizar la cuenta de tests y la lista de archivos. Sumar una fila "Entrega final" a la tabla de entregas.
     — verificación: vista previa del Markdown en GitHub después del push (el Mermaid se dibuja); todos los enlaces relativos existen (`ls` de cada ruta citada).
 
-22. [ ] **Verificación final en limpio:** clonar de GitHub en una carpeta temporal del scratchpad, `pytest -q` en el clon, y CI en verde sobre ese mismo commit (`gh run list -L 1`).
+22. [x] *(Hecho: clon de GitHub en 318f647 → 247 passed en 9,7 s; CI en verde en cada commit de la entrega.)* **Verificación final en limpio:** clonar de GitHub en una carpeta temporal del scratchpad, `pytest -q` en el clon, y CI en verde sobre ese mismo commit (`gh run list -L 1`).
     — verificación: la salida de los dos, citada en el resumen de la implementación.
 
 ## Riesgos
