@@ -345,7 +345,13 @@ El workflow [`.github/workflows/sistema.yml`](.github/workflows/sistema.yml) cor
 - **`create_react_agent` está deprecado** en LangGraph y desaparece en la 2.0. Lo dejé fijado con
   `langgraph-prebuilt==1.1.0`; migrar a `create_agent` es el próximo paso.
 - **Si la API se apaga durante un corte de Redis**, el mensaje queda en `tambor:procesando` y el
-  trabajo en `RUNNING` hasta el próximo arranque, que lo recupera.
+  trabajo en `RUNNING` hasta el próximo arranque, que lo recupera. Lo mismo pasa en dos casos que
+  hoy no se pueden provocar sin datos corruptos o un corte de red de milisegundos: un error que no
+  es de Redis fuera del grafo (un trabajo guardado que no valida), y un `BLMOVE` cuya respuesta se
+  pierde. La salida es la misma del límite anterior: un latido y una recuperación periódica.
+- **Si Redis se corta 4 veces seguidas justo al guardar un trabajo que ya terminó**, queda `FAILED`
+  aunque el checkpoint tenga el resultado (y, si era un reembolso, ya registrado). No se paga dos
+  veces: reenviar el pedido lo informa como "ya tenía un reembolso registrado".
 - **Una firma que llega después de `CHECKPOINT_TTL_MIN`** (un día) termina en `FAILED`: el trabajo
   dura 7 días pero su checkpoint no, y hay que volver a mandar el pedido.
 - **El modelo es `claude-haiku-4-5`.** `claude-haiku-5-5` sería unas 10 veces más barato, pero

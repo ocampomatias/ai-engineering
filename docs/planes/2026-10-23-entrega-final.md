@@ -1,5 +1,5 @@
 # Entrega final del curso AI Engineering: "The Intelligence System"
-23-oct-2026 · Proyecto: `C:\Users\ocamp\OneDrive\Desktop\CLAUDE CODE\AI ENGINEERING` (repo público https://github.com/ocampomatias/ai-engineering, rama `main`, base `d8df84f`) · Vence: 7-nov-2026 · Estado: en auditoría
+23-oct-2026 · Proyecto: `C:\Users\ocamp\OneDrive\Desktop\CLAUDE CODE\AI ENGINEERING` (repo público https://github.com/ocampomatias/ai-engineering, rama `main`, base `d8df84f`) · Vence: 7-nov-2026 · Estado: terminado
 
 Todas las rutas de este plan son relativas a esa carpeta.
 
@@ -373,3 +373,30 @@ Cuando algo se rompe en producción se nota así: un trabajo en `FAILED` con el 
 | PE2: descripciones, validadores y logs | 9, 10, 12 | test del esquema, `/docs`, líneas `validación OK` |
 | PE5: reintentos y concurrencia | 11, 13 | tests nuevos |
 | PE6: clon en limpio | 7, 22 | job `tests` y verificación final |
+
+## Auditoría
+
+Tres vueltas con un auditor nuevo cada vez (Ramiro, solo lectura). **Veredicto final: APROBADO** (vuelta 3, sobre `70c3ce0`).
+
+| Vuelta | Veredicto | Qué encontró | Qué se hizo |
+|---|---|---|---|
+| 1 | BLOQUEADO | **Mayor:** un corte de Redis dentro de `procesar` dejaba el mensaje varado en `tambor:procesando` y el trabajo en `RUNNING` (reproducido con fakeredis; además pasó en vivo en E3). Menores: firma con checkpoint vencido re-corría el grafo; "ya tenía un reembolso" para el reembolso del mismo trabajo; `--reinicio` no detectaba otra API; compose sin `restart` ni AOF; dependencias de segundo nivel sin fijar. | Todo arreglado (`8195c6f`, `600a368`): los cortes de Redis se tratan como transitorios en todo el trabajo y el mensaje vuelve a la cola (tope 3); FAILED claro con checkpoint vencido; `registrar_reembolso` reconoce al mismo trabajo; `--reinicio` aborta si hay otra API; `restart` + `appendonly`; `langgraph-checkpoint`, `redisvl`, `openinference-instrumentation`, `opentelemetry-*` fijados. |
+| 2 | BLOQUEADO | **Mayor:** `devolver` se intentaba una sola vez a los 2 s (redis-py ya reintenta 10 veces, así que llega un corte largo) y pasado el tope no se devolvía. Menor: Redis sin `restart`, comentario de AOF exagerado. | Arreglado (`70c3ce0`): `devolver` se reintenta con espera de 2 a 30 s hasta que Redis vuelve; es idempotente (WATCH + LPOS + MULTI); siempre se devuelve y `procesar` marca FAILED sin correr el grafo pasado el tope. |
+| 3 | APROBADO | 3 Menores (abajo). | Documentados en "Límites conocidos" del README. |
+
+**Descartado:** nada; todos los hallazgos se sostuvieron al verificarlos contra el código.
+
+### Deuda conocida
+1. Pasado el tope de cortes de Redis, el trabajo queda FAILED sin mirar si el checkpoint ya tiene el resultado (si era un reembolso, ya registrado; no se duplica plata). Arreglo: `aget_state` antes de marcar FAILED.
+2. Un error que no es de Redis fuera del grafo (trabajo guardado que no valida, Redis lleno) deja el mensaje en "en proceso" hasta el próximo arranque.
+3. Si se pierde la respuesta de un `BLMOVE`, ese mensaje queda en "en proceso" hasta el próximo arranque. 2 y 3 tienen la misma salida que el límite de una instancia: latido + recuperación periódica.
+4. `LLM_PROVIDER` vale `openai` por defecto en el código y `anthropic` en `.env.example` (documentado en la tabla de variables).
+5. Sin lint en el CI (ruff no está en el entorno).
+
+### Costo real
+- **API de Anthropic (evidencia):** ~USD 0,35, medido por los tokens de los spans `ChatAnthropic` en Phoenix (estimado: USD 0,30–0,54; tope USD 0,50). Incluye 3 corridas de `--reinicio` (una perdió el span `firma`, otra la cortaron timeouts de Redis Cloud) y 2 de `--carga` (la 2.ª, tras el fix del costo duplicado).
+- **CI, tests, auditoría:** USD 0 en APIs (key falsa y modelos guionados).
+- El costo de trabajo de Claude por etapa no se consultó en `/admin/costos` desde esta sesión.
+
+### Entrega
+Repo público en `main` (https://github.com/ocampomatias/ai-engineering). Verificado "en producción" (el entorno del corrector): clon limpio de GitHub con 247→255 tests en verde y workflow "Sistema" en verde (tests en Ubuntu limpio + `./run.sh` con Docker Compose) en cada commit. Falta solo la bandeja: que Matías suba el link en Coderhouse antes del 7-nov-2026.
