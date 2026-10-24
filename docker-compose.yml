@@ -4,6 +4,8 @@
 services:
   redis:
     image: redis:8.4.7  # Redis 8 trae Query Engine y JSON, que usa AsyncRedisSaver
+    # AOF: cada escritura queda en disco (el registro de reembolsos es la idempotencia; no puede perderse).
+    command: ["redis-server", "--appendonly", "yes"]
     # Sin puerto publicado: la API lo ve por la red del compose y no choca con un Redis local.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -23,6 +25,7 @@ services:
 
   api:
     build: .
+    restart: unless-stopped  # si el proceso muere, vuelve solo y recupera lo que quedó a medias
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379

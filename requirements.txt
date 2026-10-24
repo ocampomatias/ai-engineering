@@ -43,6 +43,13 @@ uvicorn==0.53.0
 httpx==0.28.1
 redis==8.1.0
 langgraph-checkpoint-redis==0.5.2
+# Dependencias de segundo nivel que el código importa o de las que depende el checkpointer:
+# fijadas también para que un clon de dentro de un mes instale la misma combinación.
+langgraph-checkpoint==4.2.0
+redisvl==0.28.0
+openinference-instrumentation==0.1.71
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
 arize-phoenix-otel==0.17.2
 # Anotación humana de la firma (phoenix.client.AsyncClient en app/observability.py).
 arize-phoenix-client==3.5.0
