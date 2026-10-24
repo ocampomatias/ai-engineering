@@ -1,0 +1,134 @@
+{
+  "job_id": "26347407df304fec85183728e93497d9",
+  "linea_de_tiempo": [
+    {
+      "s": 41.0,
+      "evento": "API 1 arriba (pid 41028)"
+    },
+    {
+      "s": 41.3,
+      "evento": "pedido encolado: 26347407df304fec85183728e93497d9"
+    },
+    {
+      "s": 55.8,
+      "evento": "el supervisor ya decidió y el investigador empezó"
+    },
+    {
+      "s": 56.0,
+      "evento": "API 1 muerta con kill() (el trabajo estaba en RUNNING)"
+    },
+    {
+      "s": 97.4,
+      "evento": "API 2 arriba (pid 43776)"
+    },
+    {
+      "s": 172.4,
+      "evento": "el trabajo llegó a WAITING_APPROVAL"
+    },
+    {
+      "s": 173.1,
+      "evento": "POST /approve True -> 202"
+    },
+    {
+      "s": 179.4,
+      "evento": "el trabajo terminó en DONE"
+    }
+  ],
+  "estado_al_matar": "RUNNING",
+  "log_recuperacion": [
+    "2026-10-23 21:34:11,816 | INFO    | app.main | [recuperación] 1 mensaje(s) vuelven a la cola",
+    "2026-10-23 21:34:15,854 | INFO    | app.worker | [worker] 26347407df304fec85183728e93497d9 reanuda desde el checkpoint (siguiente: investigador)"
+  ],
+  "decisiones_del_supervisor": {
+    "api_1": 1,
+    "api_2": 2
+  },
+  "arranques_del_investigador": {
+    "api_1": 1,
+    "api_2": 2
+  },
+  "en_espera": {
+    "id": "26347407df304fec85183728e93497d9",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "WAITING_APPROVAL",
+    "creado": "2026-10-24T00:33:16.663257Z",
+    "actualizado": "2026-10-24T00:35:27.815218Z",
+    "aprobacion": {
+      "accion": {
+        "tipo": "reembolso",
+        "cobro_ids": [
+          "cob_7E8Q4",
+          "cob_7F3K2"
+        ]
+      },
+      "analisis": "# Respuesta: Reembolso de Cobros — Ferretería López\n\n## Confirmación de Estado y Montos\n\n| ID Cobro | Monto | Estado | Fecha | Observación |\n|----------|-------|--------|-------|------------|\n| cob_7E8Q4 | 8.700,00 ARS | Aprobado | 2026-10-04 | Válido para reembolsar |\n| cob_7F3K2 | 45.990,00 ARS | Rechazado | 2026-10-06 | No se puede reembolsar (código TMB-2031) |\n\n## Resultado del Reembolso\n\n**cob_7E8Q4:** Puede procesarse. El cobro está aprobado y dentro del plazo de 180 días.\n\n**cob_7F3K2:** No se puede reembolsar. El cobro fue rechazado por autenticación 3-D Secure fallida (código TMB-2031, después de 3 intentos). Los reembolsos solo se aplican a cobros en estado aprobado. Según procedimiento TMB-4090, un cobro en estado incompatible no puede reembolsarse dentro de la plataforma.\n\n## Recomendación\n\nPara cob_7F3K2, sugerir al cliente que reinicie el pago con su tarjeta de crédito. Si prefiere una devolución manual, deberá procesarse fuera de la plataforma Tambor.",
+      "pregunta": "¿Aprobás reembolsar cob_7E8Q4, cob_7F3K2?",
+      "span_id": "cfbb0e041d419933"
+    },
+    "resultado": null,
+    "error": null
+  },
+  "final": {
+    "id": "26347407df304fec85183728e93497d9",
+    "pedido": "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y el monto de cada uno.",
+    "estado": "DONE",
+    "creado": "2026-10-24T00:33:16.663257Z",
+    "actualizado": "2026-10-24T00:35:33.822536Z",
+    "aprobacion": null,
+    "resultado": {
+      "respuesta_final": "# Respuesta: Reembolso de Cobros — Ferretería López\n\n## Confirmación de Estado y Montos\n\n| ID Cobro | Monto | Estado | Fecha | Observación |\n|----------|-------|--------|-------|------------|\n| cob_7E8Q4 | 8.700,00 ARS | Aprobado | 2026-10-04 | Válido para reembolsar |\n| cob_7F3K2 | 45.990,00 ARS | Rechazado | 2026-10-06 | No se puede reembolsar (código TMB-2031) |\n\n## Resultado del Reembolso\n\n**cob_7E8Q4:** Puede procesarse. El cobro está aprobado y dentro del plazo de 180 días.\n\n**cob_7F3K2:** No se puede reembolsar. El cobro fue rechazado por autenticación 3-D Secure fallida (código TMB-2031, después de 3 intentos). Los reembolsos solo se aplican a cobros en estado aprobado. Según procedimiento TMB-4090, un cobro en estado incompatible no puede reembolsarse dentro de la plataforma.\n\n## Recomendación\n\nPara cob_7F3K2, sugerir al cliente que reinicie el pago con su tarjeta de crédito. Si prefiere una devolución manual, deberá procesarse fuera de la plataforma Tambor.",
+      "resultado_accion": "cob_7E8Q4: ya tenía un reembolso registrado, no se duplica.\ncob_7F3K2: está rechazado; solo se reembolsan cobros aprobados.",
+      "revision": {
+        "aprobado": true,
+        "revisor": "probar_api.py",
+        "comentario": "verificado en la prueba, después del reinicio"
+      },
+      "decisiones": [
+        {
+          "evaluacion": "Todavía no hay aportes. El usuario solicita reembolsar dos cobros específicos pero primero necesita confirmación del estado y monto de cada uno.",
+          "siguiente": "investigador",
+          "instruccion": "Consultá en la base de cobros los detalles de los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Para cada uno, traé: ID del cobro, monto, estado actual y fecha. Usá los estados y definiciones que tengas en tus herramientas.",
+          "motivo": "Necesitamos datos concretos (estados y montos) antes de proceder con cualquier reembolso, y eso es tarea del investigador."
+        },
+        {
+          "evaluacion": "El investigador respondió la instrucción completamente. Trajo datos concretos y verificables: dos IDs de cobro con montos (8.700,00 ARS y 45.990,00 ARS), estados claros (aprobado y rechazado), fechas, medio de pago e intentos. Los datos provienen de sus herramientas y usa las definiciones de la base. No hay supuestos. Sin embargo, el pedido del usuario es \"reembolsá los cobros\", pero el segundo está en estado \"rechazado\" con código de error TMB-2031. Antes de proceder al reembolso, es crítico entender si un cobro rechazado puede o debe ser reembolsado, y qué significa ese código de error según los procedimientos de Tambor.",
+          "siguiente": "investigador",
+          "instruccion": "Consultá en la base de conocimiento y procedimientos de Tambor: 1) ¿Qué significa el código de error TMB-2031 y en qué circunstancias se genera? 2) ¿Cuál es el procedimiento para reembolsar cobros en estado \"rechazado\"? ¿Es posible reembolsar uno que nunca fue aprobado o efectivizado? Traé las definiciones y restricciones que uses.",
+          "motivo": "El segundo cobro está rechazado con error. Necesito confirmar si es reembolsable y qué significa ese código antes de validar que el reembolso sea posible."
+        },
+        {
+          "evaluacion": "El investigador respondió exactamente lo que se le pidió: \n1. Confirmó el estado y monto de ambos cobros con datos concretos (IDs, montos en ARS, estados, fechas, código de error).\n2. Explicó qué significa TMB-2031 y en qué circunstancias se genera.\n3. Documentó el procedimiento de reembolsos y la restricción crítica: **no se puede reembolsar un cobro rechazado** (TMB-4090).\n\nLos datos son verificables y sin suposiciones. La conclusión es clara: cob_7E8Q4 (aprobado, 8.700 ARS) sí se puede reembolsar, pero cob_7F3K2 (rechazado, 45.990 ARS) no se puede reembolsar dentro de la plataforma.",
+          "siguiente": "sintesis",
+          "instruccion": "",
+          "motivo": "Ya hay todos los datos y restricciones necesarios para responder al usuario. No hace falta análisis adicional (no hay cálculos complejos) ni más investigación. Solo falta redactar la respuesta final explicando qué se puede y qué no se puede hacer."
+        }
+      ],
+      "aportes": [
+        {
+          "agente": "investigador",
+          "instruccion": "Consultá en la base de cobros los detalles de los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Para cada uno, traé: ID del cobro, monto, estado actual y fecha. Usá los estados y definiciones que tengas en tus herramientas.",
+          "contenido": "Perfecto. Aquí están los detalles de los dos cobros de Ferretería López:\n\n**Cobro 1: cob_7E8Q4**\n- ID: cob_7E8Q4\n- Monto: 8.700,00 ARS\n- Estado: **aprobado**\n- Fecha: 2026-10-04 11:15:02\n- Medio de pago: transferencia\n- Intentos: 1\n- Código de error: ninguno\n\n**Cobro 2: cob_7F3K2**\n- ID: cob_7F3K2\n- Monto: 45.990,00 ARS\n- Estado: **rechazado**\n- Fecha: 2026-10-06 19:42:10\n- Medio de pago: tarjeta de crédito\n- Intentos: 3\n- Código de error: TMB-2031\n\nEl segundo cobro tiene un código de error asociado. ¿Necesitás que busque qué significa el código TMB-2031?",
+          "herramientas": [
+            "consultar_cobro",
+            "consultar_cobro"
+          ],
+          "error": false,
+          "ms": 9601.74079996068
+        },
+        {
+          "agente": "investigador",
+          "instruccion": "Consultá en la base de conocimiento y procedimientos de Tambor: 1) ¿Qué significa el código de error TMB-2031 y en qué circunstancias se genera? 2) ¿Cuál es el procedimiento para reembolsar cobros en estado \"rechazado\"? ¿Es posible reembolsar uno que nunca fue aprobado o efectivizado? Traé las definiciones y restricciones que uses.",
+          "contenido": "Perfecto. Aquí está lo que encontré en la base de conocimiento de Tambor:\n\n---\n\n## 1) **Código de Error TMB-2031: Autenticación 3-D Secure Fallida**\n\n**Definición:**\n- **Código:** TMB-2031\n- **HTTP Status:** 422\n- **Servicio:** payments-worker\n- **Mensaje:** Autenticación 3-D Secure fallida\n\n**Causa:**\nEl comprador no completó el desafío de 3-D Secure o lo completó mal.\n\n**Circunstancias de generación:**\nSe genera cuando hay un error en el proceso de autenticación de seguridad 3-D Secure durante el procesamiento del pago.\n\n**Acción recomendada:**\nOfrecer reintentar el pago. Después de 3 intentos fallidos, la tarjeta se bloquea 24 horas para ese comercio.\n\n---\n\n## 2) **Procedimiento para Reembolsar Cobros: Definiciones y Restricciones**\n\n**¿Es posible reembolsar un cobro rechazado (nunca aprobado)?**\n\n**Respuesta: NO, no es posible.**\n\n**Restricción principal (código TMB-4090):**\n- **Código:** TMB-4090\n- **HTTP Status:** 409\n- **Mensaje:** Cobro en estado incompatible\n- **Causa:** Se intentó **reembolsar uno que no está aprobado** (o cancelar uno que ya no está pendiente)\n- **Acción:** Consultar el estado actual del cobro antes de la operación\n\n**Procedimiento válido para reembolsos (solo cobros aprobados):**\n\nSegún la referencia de la API de cobros:\n- **Endpoint:** `POST /v2/cobros/{id}/reembolsos`\n- **Requisito:** El cobro debe estar en estado **aprobado**\n- **Plazo:** Se puede reembolsar durante **180 días desde que se aprobó**\n- **Límites:**\n  - Máximo **10 reembolsos parciales** por cobro\n  - La suma total de reembolsos nunca puede superar el monto original\n  - Se permiten reembolsos totales o parciales\n\n**Códigos de error relacionados con reembolsos fuera de especificación:**\n- **TMB-3001:** Reembolso fuera de plazo (más de 180 días) → Hacer la devolución por fuera de la plataforma\n- **TMB-3002:** Reembolso mayor al saldo disponible → Consultar el saldo reembolsable con `GET /v2/cobros/{id}` antes de intentar\n\n---\n\n**Conclusión:** Un cobro rechazado **nunca puede reembolsarse** dentro de la plataforma porque no fue aprobado/efectivizado. Solo cobros en estado \"aprobado\" pueden ser reembolsados, dentro de 180 días y respetando los límites de cantidad y monto.",
+          "herramientas": [
+            "buscar_documentacion",
+            "buscar_documentacion",
+            "buscar_documentacion"
+          ],
+          "error": false,
+          "ms": 43400.24049999192
+        }
+      ]
+    },
+    "error": null
+  }
+}

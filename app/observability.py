@@ -42,6 +42,10 @@ def iniciar_trazas() -> TracerProvider | None:
     from phoenix.client import AsyncClient  # imports acá: los tests no los necesitan
     from phoenix.otel import register
 
+    # El SDK de Anthropic (1.15+) emite su propio span por llamada al ver un tracer global: Phoenix
+    # contaría cada llamada dos veces (y el doble de costo). El span de LangChain ya trae todo.
+    # Antes de crear los modelos, que leen la variable al construirse.
+    os.environ.setdefault("ANTHROPIC_OPEN_TELEMETRY", "false")
     proveedor = register(
         project_name=os.getenv("PHOENIX_PROJECT_NAME", "tambor-api"),
         batch=True,  # exporta en segundo plano, no en el camino de cada request

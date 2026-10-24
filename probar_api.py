@@ -18,6 +18,7 @@ Deja evidencia/reinicio_api.json y el log de los dos servidores en evidencia/log
 import argparse
 import asyncio
 import json
+import math
 import os
 import subprocess
 import sys
@@ -45,6 +46,15 @@ PEDIDO_HITL = (
     "Reembolsá los cobros cob_7E8Q4 y cob_7F3K2 de Ferretería López. Antes confirmá el estado y "
     "el monto de cada uno."
 )
+
+
+def percentil(valores: list[float], p: float) -> float:
+    """Rango más cercano: con 5 muestras, p95 es la más lenta (no se interpola)."""
+    orden = sorted(valores)
+    return orden[max(0, math.ceil(p / 100 * len(orden)) - 1)]
+
+
+assert percentil([5, 1, 4, 2, 3], 95) == 5 and percentil([5, 1, 4, 2, 3], 50) == 3
 
 
 async def esperar(http: httpx.AsyncClient, job_id: str, estados: set[str], tope_s: float = 300) -> dict[str, Any]:
@@ -83,8 +93,17 @@ async def carga(http: httpx.AsyncClient) -> int:
               f"{' -> '.join(r['agentes']) or '-'} | {r['pedido'][:60]}")
     secuencial = sum(r["s_total"] for r in resultados)
     print(f"\nTodo junto: {total:.1f} s (la suma de cada uno es {secuencial:.1f} s: corrieron en paralelo).")
+    latencia = {
+        f"{nombre}_p{p}": percentil([r[campo] for r in resultados], p)
+        for nombre, campo in (("total_s", "s_total"), ("post_ms", "ms_post"))
+        for p in (50, 95)
+    }
+    print(f"Latencia total: p50 {latencia['total_s_p50']:.1f} s, p95 {latencia['total_s_p95']:.1f} s | "
+          f"POST /tasks: p50 {latencia['post_ms_p50']:.1f} ms, p95 {latencia['post_ms_p95']:.1f} ms")
+    print(f"(p95 por rango más cercano: con {len(resultados)} muestras es la más lenta.)")
     (EVIDENCIA / "carga_api.json").write_text(
-        json.dumps({"s_total": round(total, 1), "pedidos": resultados}, ensure_ascii=False, indent=2),
+        json.dumps({"s_total": round(total, 1), "latencia": latencia, "pedidos": resultados},
+                   ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return 0 if all(r["estado"] == "DONE" for r in resultados) else 1
@@ -223,6 +242,8 @@ async def reinicio() -> int:
             marca(f"POST /approve {revision['aprobado']} -> {r.status_code}")
             final = await esperar(http, job["id"], FINALES)
             marca(f"el trabajo terminó en {final['estado']}")
+            # Las trazas salen en lotes cada 5 s: sin esta espera, kill() se lleva el span `firma`.
+            await asyncio.sleep(8)
     finally:
         apagar(proceso, log)
 

@@ -272,10 +272,10 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
 ### Fase E: evidencia real (rúbrica: observabilidad 20 %; consigna 5; checklist PE7). Tope: USD 0,50
 
-16. [ ] **Comprobación previa, sin gastar.** `phoenix serve` en una terminal; `uvicorn app.main:app` con el `.env` real (Redis Cloud). En el log de arranque tiene que aparecer `documentación: pinecone-hibrido`. Si dice `bm25-local`, falta `PINECONE_API_KEY` en el `.env`: frenar, porque la evidencia del RAG tiene que ser con Pinecone. Anotar el costo acumulado del proyecto en Phoenix como punto de partida.
+16. [x] *(Hecho: `documentación: pinecone-hibrido` en el log de arranque y `/health` 200.)* **Comprobación previa, sin gastar.** `phoenix serve` en una terminal; `uvicorn app.main:app` con el `.env` real (Redis Cloud). En el log de arranque tiene que aparecer `documentación: pinecone-hibrido`. Si dice `bm25-local`, falta `PINECONE_API_KEY` en el `.env`: frenar, porque la evidencia del RAG tiene que ser con Pinecone. Anotar el costo acumulado del proyecto en Phoenix como punto de partida.
     — verificación: línea del log y `/health` en 200.
 
-17. [ ] **E3 primero (lo más valioso): `python probar_api.py --reinicio`.** Una corrida, unos USD 0,05–0,10 (el nodo que se cortó se paga dos veces).
+17. [x] *(Hecho: `--reinicio` en DONE; `[recuperación] 1 mensaje(s)` y `reanuda desde el checkpoint (siguiente: investigador)`, una sola decisión del supervisor antes del corte. Se corrió 3 veces: la 1.ª perdía el span `firma` porque el script mataba la API 2 antes de que salieran las trazas (se agregó una espera de 8 s); la 2.ª la cortaron timeouts de Redis Cloud (el trabajo se cerró como FAILED con ese motivo). `cob_7E8Q4` sale "ya tenía un reembolso registrado" porque se reembolsó en la PE7: la idempotencia entre corridas.)* **E3 primero (lo más valioso): `python probar_api.py --reinicio`.** Una corrida, unos USD 0,05–0,10 (el nodo que se cortó se paga dos veces).
     — verificación:
     - `evidencia/reinicio_api.json` con `DONE`, el reembolso de `cob_7E8Q4` registrado y `cob_7F3K2` rechazado;
     - en `evidencia/log_reinicio_api.log`, las líneas `[recuperación] 1 mensaje(s) vuelven a la cola` y `reanuda desde el checkpoint`, y una sola línea `[supervisor] evalúa` antes del corte;
@@ -283,13 +283,13 @@ Ordenados por impacto en la rúbrica. Cada fase se commitea en `main` y se pushe
 
     Nota para el README: el span raíz de la corrida que se cortó no llega a Phoenix porque el proceso murió antes de exportarlo. Es justamente lo que pasa en una caída real.
 
-18. [ ] **E2: `python probar_api.py --carga` (5 pedidos concurrentes).** Unos USD 0,30–0,40. El script suma p50 y p95 de la latencia total y del `POST`, calculados por rango más cercano: con 5 muestras, p95 es la más lenta, y se dice así. Guarda `evidencia/salida_carga_final.txt` y `carga_api.json`.
+18. [x] *(Hecho: 5/5 DONE, p50 41,6 s y p95 66,3 s; POST p95 1,2 s. Hallazgo: el SDK de Anthropic 1.15 emitía su propio span por llamada y Phoenix contaba el costo dos veces; se apagó con `ANTHROPIC_OPEN_TELEMETRY=false` en `iniciar_trazas` y la carga se repitió para que la captura muestre el costo real: USD 0,15 los 5 pedidos. Gasto real total de la Fase E: ~USD 0,35, medido por tokens de los spans `ChatAnthropic`.)* **E2: `python probar_api.py --carga` (5 pedidos concurrentes).** Unos USD 0,30–0,40. El script suma p50 y p95 de la latencia total y del `POST`, calculados por rango más cercano: con 5 muestras, p95 es la más lenta, y se dice así. Guarda `evidencia/salida_carga_final.txt` y `carga_api.json`.
     - Antes de correr, sumar el costo de E3 al punto de partida: si lleva más de USD 0,15, no correr E2 todavía y mandarlo a la bandeja.
     - Si algún pedido termina `FAILED` y repetirlo lleva el total por encima de USD 0,50, la repetición va a la bandeja.
 
     — verificación: los 5 en `DONE`; p95 impreso; costo acumulado en Phoenix ≤ USD 0,50.
 
-19. [ ] **Capturas con Playwright** en `screenshots/`:
+19. [x] *(Hecho: 11 es la vista Sessions con latencia y costo por trabajo, porque Traces y Metrics de Phoenix 20.23 no terminaban de cargar; 12 el span `buscar_documentacion` con EnsembleRetriever y `pinecone-hibrido`; 13 la sesión recuperada con la anotación humana; 14 la página de proyectos. El costo de 13 y de las sesiones previas a las 21:40 aparece duplicado por el hallazgo del paso 18.)* **Capturas con Playwright** en `screenshots/`:
     - `11_phoenix_carga_latencia_costo.png`: las 5 trazas raíz de la carga con las columnas de latencia y costo;
     - `12_phoenix_rag_pinecone.png`: el span `buscar_documentacion` con `"buscador": "pinecone-hibrido"` y sus fragmentos;
     - `13_phoenix_sesion_recuperada.png`: la sesión del trabajo de E3;

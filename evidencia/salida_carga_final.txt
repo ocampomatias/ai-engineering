@@ -1,0 +1,10 @@
+Enviando 5 pedidos a la vez...
+- DONE   POST 1196.8 ms | total  55.9 s | investigador -> analista | Analizá los últimos 5 cobros de Ferretería López: qué porcen
+- DONE   POST  461.9 ms | total  66.3 s | investigador -> analista | Compará la tasa de rechazo de Librería Andina y Café del Pue
+- DONE   POST 1125.5 ms | total  38.7 s | investigador -> analista | ¿Cuánto cobró en total Café del Puerto en sus últimos 5 cobr
+- DONE   POST 1086.5 ms | total  27.4 s | investigador | ¿Qué cobros de Farmacia López Hermanos están en revisión y q
+- DONE   POST 1082.4 ms | total  41.6 s | investigador | ¿Qué dice la documentación sobre el error TMB-2031 y cuántos
+
+Todo junto: 66.4 s (la suma de cada uno es 229.9 s: corrieron en paralelo).
+Latencia total: p50 41.6 s, p95 66.3 s | POST /tasks: p50 1086.5 ms, p95 1196.8 ms
+(p95 por rango más cercano: con 5 muestras es la más lenta.)
